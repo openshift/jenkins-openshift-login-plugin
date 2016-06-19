@@ -1,0 +1,18 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form">
+  <f:entry title="${%Service Account Directory}" field="serviceAccountDirectory">
+    <f:textbox/>
+  </f:entry>
+  <f:entry title="${%Service Account Name}" field="serviceAccountName">
+    <f:textbox/>
+  </f:entry>
+  <f:entry title="${%OpenShift Server Prefix}" field="serverPrefix">
+    <f:textbox/>
+  </f:entry>
+  <f:entry title="${%Client Id}" field="clientId">
+    <f:textbox/>
+  </f:entry>
+  <f:entry title="${%Client Secret}" field="clientSecret">
+    <f:password/>
+  </f:entry>
+</j:jelly>
