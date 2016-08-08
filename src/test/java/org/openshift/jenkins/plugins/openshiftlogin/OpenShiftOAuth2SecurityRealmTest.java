@@ -30,12 +30,12 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Random;
@@ -52,10 +52,10 @@ import com.gargoylesoftware.htmlunit.FailingHttpStatusCodeException;
 import com.gargoylesoftware.htmlunit.Page;
 import com.gargoylesoftware.htmlunit.WebClient;
 import com.gargoylesoftware.htmlunit.WebConnection;
-import com.gargoylesoftware.htmlunit.WebRequestSettings;
+import com.gargoylesoftware.htmlunit.WebRequest;
+//import com.gargoylesoftware.htmlunit.WebRequestSettings;
 import com.gargoylesoftware.htmlunit.WebResponse;
 import com.gargoylesoftware.htmlunit.html.HtmlButton;
-import com.gargoylesoftware.htmlunit.html.HtmlElement;
 import com.gargoylesoftware.htmlunit.html.HtmlForm;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import com.gargoylesoftware.htmlunit.util.WebConnectionWrapper;
@@ -91,7 +91,7 @@ public class OpenShiftOAuth2SecurityRealmTest {
 
 	@Test
 	public void testLoginUrl() throws Exception {
-		OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, openshiftServer, clientID, clientSecret);
+		OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, openshiftServer, clientID, clientSecret, openshiftServer);
 		assertThat(realm.getLoginUrl(), is("securityRealm/commenceLogin"));
 	}
 
@@ -100,7 +100,7 @@ public class OpenShiftOAuth2SecurityRealmTest {
 		OpenShiftOAuth2SecurityRealm.redirectUrl = "http://localhost:19191/jenkins/securityRealm/finishLogin";
 		OpenShiftOAuth2SecurityRealm.testTransport = new NetHttpTransport.Builder().doNotValidateCertificate().build();
 
-		final OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, openshiftServer, clientID, clientSecret);
+		final OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, openshiftServer, clientID, clientSecret, openshiftServer);
 		OAuthSession s = realm.newOAuthSession("http://localhost/start", "http://localhost/done");
 
 		// verify an initial redirect is requested
@@ -118,53 +118,65 @@ public class OpenShiftOAuth2SecurityRealmTest {
 			return;
 		
 		WebClient client = new WebClient();
-		client.setUseInsecureSSL(true);
-		final WebConnection conn = client.getWebConnection();
-		client.setWebConnection(new WebConnectionWrapper(conn) {
-		    public WebResponse getResponse(final WebRequestSettings settings) throws IOException {
-		        WebResponse resp = conn.getResponse(settings);
-		        if (resp.getStatusCode() == 302 && resp.getResponseHeaderValue("Location").startsWith(realm.redirectUrl)) {
-		        	throw new FailingHttpStatusCodeException(resp);
-		        }
-		        return resp;
-		    }
-		});
-		
-		// go through login
-		HtmlPage p = client.getPage(m2.getURL());
-		List<HtmlForm> forms = p.getForms();
-		assertThat(forms.isEmpty(), is(false));
-		HtmlForm form = forms.get(0);
-		form.getInputByName("username").setValueAttribute("admin"+String.valueOf(new Random().nextInt()));
-		form.getInputByName("password").setValueAttribute("admin");
-        final List<HtmlButton> buttons = form.getElementsByAttribute("button", "type", "submit");
-
-        String code = "";
 		try {
-			p = buttons.get(0).click();
-
-			// it's possible this user has already been approved
-			assertThat( p.getWebResponse().getStatusCode(), is(200) );
-			assertThat( p.getWebResponse().getContentAsString(), containsString("Do you approve granting an access token to the following") );
-			assertThat( p.getWebResponse().getContentAsString(), containsString(clientID) );
-			assertThat( p.getWebResponse().getContentAsString(), containsString("securityRealm/finishLogin") );
-			form = p.getForms().get(0);
+			//client.setUseInsecureSSL(true);
+			final WebConnection conn = client.getWebConnection();
+			client.setWebConnection(new WebConnectionWrapper(conn) {
+			    public WebResponse getResponse(final WebRequest settings) throws IOException {
+			        WebResponse resp = conn.getResponse(settings);
+			        if (resp.getStatusCode() == 302 && resp.getResponseHeaderValue("Location").startsWith(OpenShiftOAuth2SecurityRealm.redirectUrl)) {
+			        	throw new FailingHttpStatusCodeException(resp);
+			        }
+			        return resp;
+			    }
+			});
 			
-			// will redirect
-			Page p2 = form.submit();
-			fail("should have redirected: "+p2.getWebResponse().getContentAsString());
-		} catch (FailingHttpStatusCodeException e) {
-			if (e.getStatusCode() != 302) {
-				throw e;
+			// go through login
+			HtmlPage p = client.getPage(m2.getURL());
+			List<HtmlForm> forms = p.getForms();
+			assertThat(forms.isEmpty(), is(false));
+			HtmlForm form = forms.get(0);
+			form.getInputByName("username").setValueAttribute("admin"+String.valueOf(new Random().nextInt()));
+			form.getInputByName("password").setValueAttribute("admin");
+	        final List<HtmlButton> buttons = form.getElementsByAttribute("button", "type", "submit");
+
+	        String code = "";
+			try {
+				p = buttons.get(0).click();
+
+				// it's possible this user has already been approved
+				assertThat( p.getWebResponse().getStatusCode(), is(200) );
+				assertThat( p.getWebResponse().getContentAsString(), containsString("Do you approve granting an access token to the following") );
+				assertThat( p.getWebResponse().getContentAsString(), containsString(clientID) );
+				assertThat( p.getWebResponse().getContentAsString(), containsString("securityRealm/finishLogin") );
+				form = p.getForms().get(0);
+				
+				// will redirect
+				Page p2 = form.click();
+				fail("should have redirected: "+p2.getWebResponse().getContentAsString());
+			} catch (FailingHttpStatusCodeException e) {
+				if (e.getStatusCode() != 302) {
+					throw e;
+				}
+				// if we have already approved, we'll be at the end
+				String location = e.getResponse().getResponseHeaderValue("Location");
+				assertThat( location, startsWith(OpenShiftOAuth2SecurityRealm.redirectUrl + "?") );
+				GenericUrl url = new GenericUrl(location);
+				code = (String)url.getFirst("code");
 			}
-			// if we have already approved, we'll be at the end
-			String location = e.getResponse().getResponseHeaderValue("Location");
-			assertThat( location, startsWith(realm.redirectUrl + "?") );
-			GenericUrl url = new GenericUrl(location);
-			code = (String)url.getFirst("code");
+			resp = s.onSuccess(code);
+			assertThat( resp, is(instanceOf(HttpRedirect.class)) );
+		} finally {
+			client.close();
 		}
-		resp = s.onSuccess(code);
-		assertThat( resp, is(instanceOf(HttpRedirect.class)) );
+	}
+	
+	@Test
+	public void testPodDefaults() throws Exception {
+		final OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, openshiftServer, clientID, clientSecret, openshiftServer);
+		assertThat(realm.populateDefaults(), is(false));
+		assertThat(realm.getDefaultedServerPrefix(), is(OpenShiftOAuth2SecurityRealm.DEFAULT_SVR_PREFIX));
+		assertThat(realm.getDefaultedServiceAccountDirectory(), is(OpenShiftOAuth2SecurityRealm.DEFAULT_SVC_ACCT_DIR));
 	}
 /*
 	@Test

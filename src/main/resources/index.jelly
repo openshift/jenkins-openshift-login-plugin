@@ -1,3 +1,4 @@
+<?jelly escape-by-default='true'?>
 <div>
   Allows you to log in to Jenkins via OAuth to an OpenShift installation 
 </div>
