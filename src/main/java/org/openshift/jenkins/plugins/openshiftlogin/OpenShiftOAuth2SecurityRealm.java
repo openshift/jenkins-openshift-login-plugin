@@ -42,6 +42,7 @@ import org.acegisecurity.AuthenticationException;
 import org.acegisecurity.AuthenticationManager;
 import org.acegisecurity.BadCredentialsException;
 import org.acegisecurity.GrantedAuthority;
+import org.acegisecurity.GrantedAuthorityImpl;
 import org.acegisecurity.context.SecurityContextHolder;
 import org.acegisecurity.providers.UsernamePasswordAuthenticationToken;
 import org.acegisecurity.providers.anonymous.AnonymousAuthenticationToken;
@@ -257,11 +258,13 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                                 }
                             });
                     GenericUrl url = new GenericUrl(serverPrefix + "/oapi/v1/users/~");
-
+                    
+                    // do self-sar here to see if you have the "admin" or "view" verb in the "build.openshift.io" api group on the "jenkins" resource 
+                    
                     HttpRequest request = requestFactory.buildGetRequest(url);
 
                     OpenShiftUserInfo info = request.execute().parseAs(OpenShiftUserInfo.class);
-                    GrantedAuthority[] authorities = new GrantedAuthority[]{SecurityRealm.AUTHENTICATED_AUTHORITY};
+                    GrantedAuthority[] authorities = new GrantedAuthority[]{SecurityRealm.AUTHENTICATED_AUTHORITY, new GrantedAuthorityImpl("edit")};
                     // logs this user in.
                     UsernamePasswordAuthenticationToken token =
                             new UsernamePasswordAuthenticationToken(info.getName(), "", authorities);
