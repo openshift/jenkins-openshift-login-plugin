@@ -11,11 +11,11 @@
   </properties>
 
   <groupId>org.openshift.jenkins</groupId>
-  <artifactId>jenkins-openshift-login</artifactId>
+  <artifactId>openshift-login</artifactId>
   <version>0.1-SNAPSHOT</version>
   <packaging>hpi</packaging>
 
-  <name>Jenkins OpenShift Login Plugin</name>
+  <name>OpenShift Login Plugin</name>
   <url>https://wiki.jenkins-ci.org/display/JENKINS/OpenShift+Login+Plugin</url>
   <developers>
     <developer>
