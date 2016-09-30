@@ -9,6 +9,9 @@
   <f:entry title="${%OpenShift Server Prefix}" field="serverPrefix">
     <f:textbox/>
   </f:entry>
+  <f:entry title="${%OpenShift Redirect URL}" field="redirectURL">
+    <f:textbox/>
+  </f:entry>
   <f:entry title="${%Client Id}" field="clientId">
     <f:textbox/>
   </f:entry>

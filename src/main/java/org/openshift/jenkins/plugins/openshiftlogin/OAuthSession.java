@@ -27,8 +27,12 @@
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.AuthorizationCodeRequestUrl;
 import com.google.api.client.auth.oauth2.AuthorizationCodeResponseUrl;
+import com.google.api.client.auth.oauth2.Credential;
+
+import hudson.EnvVars;
 import hudson.remoting.Base64;
 import hudson.util.HttpResponses;
+
 import org.kohsuke.stapler.HttpRedirect;
 import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.Stapler;
@@ -43,6 +47,11 @@ import java.util.UUID;
  * Verifies the validity of the response by comparing the state.
  */
 public abstract class OAuthSession {
+	private static final String OPENSHIFT_ENABLE_REDIRECT_PROMPT = "OPENSHIFT_ENABLE_REDIRECT_PROMPT";
+	private static String enableRedirect = null;
+	static {
+		enableRedirect = EnvVars.masterEnvVars.get(OPENSHIFT_ENABLE_REDIRECT_PROMPT);
+	}
     private final AuthorizationCodeFlow flow;
     private final String uuid = Base64.encode(UUID.randomUUID().toString().getBytes()).substring(0,20);
     /**
@@ -54,6 +63,14 @@ public abstract class OAuthSession {
      * Where Google will redirect to once the scopes are approved by the user.
      */
     private final String redirectUrl;
+    
+    private Credential credential;
+    public Credential getCredential() {
+    	return credential;
+    }
+    public void setCredential(Credential cred) {
+    	credential = cred;
+    }
 
     public OAuthSession(AuthorizationCodeFlow flow, String from, String redirectUrl) {
         this.flow = flow;
@@ -73,7 +90,10 @@ public abstract class OAuthSession {
     
     protected HttpResponse doRequestAuthorizationCode() {
         AuthorizationCodeRequestUrl authorizationCodeRequestUrl = flow.newAuthorizationUrl().setState(uuid).setRedirectUri(redirectUrl);
-        return new HttpRedirect(authorizationCodeRequestUrl.toString());    	
+        if (OAuthSession.enableRedirect != null)
+        	return new OpenShiftHttpRedirectWithPrompt(authorizationCodeRequestUrl.toString());
+        else
+        	return new HttpRedirect(authorizationCodeRequestUrl.toString());    	
     }
 
     /**
@@ -116,5 +136,5 @@ public abstract class OAuthSession {
         return (OAuthSession) Stapler.getCurrentRequest().getSession().getAttribute(SESSION_NAME);
     }
 
-    private static final String SESSION_NAME = OAuthSession.class.getName();
+    static final String SESSION_NAME = OAuthSession.class.getName();
 }
