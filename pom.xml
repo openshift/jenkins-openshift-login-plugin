@@ -11,6 +11,13 @@
   <version>0.1-SNAPSHOT</version>
   <packaging>hpi</packaging>
 
+  <scm>
+    <connection>scm:git:ssh://github.com/jenkinsci/openshift-login-plugin.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/jenkinsci/openshift-login-plugin.git</developerConnection>
+    <url>https://github.com/jenkinsci/openshift-login-plugin</url>
+    <tag>HEAD</tag>
+  </scm>
+
   <name>OpenShift Login Plugin</name>
   <url>https://wiki.jenkins-ci.org/display/JENKINS/OpenShift+Login+Plugin</url>
   <developers>
