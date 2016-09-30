@@ -3,12 +3,8 @@
   <parent>
     <groupId>org.jenkins-ci.plugins</groupId>
     <artifactId>plugin</artifactId>
-    <version>2.6</version>
+    <version>1.642.2</version>
   </parent>
-  <properties>
-    <jenkins.version>1.642.2</jenkins.version>
-    <hpi-plugin.version>1.106</hpi-plugin.version>
-  </properties>
 
   <groupId>org.openshift.jenkins</groupId>
   <artifactId>openshift-login</artifactId>
