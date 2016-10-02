@@ -48,10 +48,6 @@ import java.util.UUID;
  */
 public abstract class OAuthSession {
 	private static final String OPENSHIFT_ENABLE_REDIRECT_PROMPT = "OPENSHIFT_ENABLE_REDIRECT_PROMPT";
-	private static String enableRedirect = null;
-	static {
-		enableRedirect = EnvVars.masterEnvVars.get(OPENSHIFT_ENABLE_REDIRECT_PROMPT);
-	}
     private final AuthorizationCodeFlow flow;
     private final String uuid = Base64.encode(UUID.randomUUID().toString().getBytes()).substring(0,20);
     /**
@@ -90,7 +86,8 @@ public abstract class OAuthSession {
     
     protected HttpResponse doRequestAuthorizationCode() {
         AuthorizationCodeRequestUrl authorizationCodeRequestUrl = flow.newAuthorizationUrl().setState(uuid).setRedirectUri(redirectUrl);
-        if (OAuthSession.enableRedirect != null)
+        String redirect = EnvVars.masterEnvVars.get(OPENSHIFT_ENABLE_REDIRECT_PROMPT);
+        if (redirect != null && !redirect.equalsIgnoreCase("false"))
         	return new OpenShiftHttpRedirectWithPrompt(authorizationCodeRequestUrl.toString());
         else
         	return new HttpRedirect(authorizationCodeRequestUrl.toString());    	

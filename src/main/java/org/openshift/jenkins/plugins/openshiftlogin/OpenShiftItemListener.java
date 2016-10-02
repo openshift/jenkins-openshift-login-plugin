@@ -52,7 +52,7 @@ public class OpenShiftItemListener extends ItemListener {
 		LOGGER.info("OpenShift OAuth: enable oauth set to " + enabled);
 		// we override the security realm with openshift oauth if running in an openshift pod
 		// and the correct env var is set on the pod during deployment (which our default templates now do)
-		if (jenkins != null && enabled != null) {
+		if (jenkins != null && enabled != null && !enabled.equalsIgnoreCase("false")) {
 			SecurityRealm priorSecurityRealm = jenkins.getSecurityRealm();
 			LOGGER.info("OpenShift OAuth: configured security realm on startup: " + priorSecurityRealm);
 			// if sec realm already openshift ouath, it has been explicitly configured, so leave alone
