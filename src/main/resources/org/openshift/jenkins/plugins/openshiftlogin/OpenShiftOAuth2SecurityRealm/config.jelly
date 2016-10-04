@@ -16,7 +16,6 @@
     <f:textbox/>
   </f:entry>
   <f:entry title="${%Client Secret}" field="clientSecret">
-  <!-- when running outside openshift, using the password field type lead to Jenkins autofilling client id and client secret with the default jenkins id/pwd (admin/password); also saw this in the http proxy field for installing plugins; did not find a jira on this; perhaps related to nss stuff?? -->
-    <f:textbox/>
+    <f:password/>
   </f:entry>
 </j:jelly>
