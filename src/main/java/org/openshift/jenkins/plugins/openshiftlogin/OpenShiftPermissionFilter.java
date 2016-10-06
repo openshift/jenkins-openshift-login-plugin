@@ -51,7 +51,7 @@ public class OpenShiftPermissionFilter implements Filter {
 	
 	private static final String LAST_SELF_SAR_POLL_TIME = "self-sar-time";
 	private static final long SELF_SAR_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes * 60 seconds * 1000 milliseconds
-	private static final String OPENSHIFT_PERMISSIONS_POLL_INTERVAL = "OPENSHIFT_PERMISSIONS_POLL_INTERVAL";
+	private static final String OPENSHIFT_PERMISSIONS_POLL_INTERVAL = "OPENSHIFT_PERMISSIONS_POLL_INTERVAL"; // doc says this is in seconds
 	
 	public OpenShiftPermissionFilter() {
 	}
@@ -86,7 +86,7 @@ public class OpenShiftPermissionFilter implements Filter {
 								
 							}
 						}
-						if (System.currentTimeMillis() - lastPermissionPoll.longValue() > interval) {
+						if (System.currentTimeMillis() - lastPermissionPoll.longValue() > (interval * 1000)) {
 							OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins.getInstance().getSecurityRealm();
 							secRealm.updateAuthorizationStrategy(oauth);
 							s.setAttribute(OAuthSession.SESSION_NAME + LAST_SELF_SAR_POLL_TIME, new Long(System.currentTimeMillis()));
