@@ -114,6 +114,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     static final String DEFAULT_SVR_PREFIX = "https://openshift.default.svc";
     static final String NAMESPACE = "namespace";
     private static final String TOKEN = "token";
+    private static final String CA_CRT = "ca.crt";
     private static final String FINISH_METHOD = "doFinishLogin";
     private static final String START_METHOD = "doCommenceLogin";
     private static final String DISPLAY_NAME = "Login with OpenShift";
@@ -290,7 +291,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         	br = new BufferedReader(new FileReader(new File(getDefaultedServiceAccountDirectory(), TOKEN)));
         	defaultedClientSecret = br.readLine();
         	runningInOpenShiftPodWithRequiredOAuthFeatures = runningInOpenShiftPodWithRequiredOAuthFeatures && (defaultedClientSecret != null ? defaultedClientSecret.length() > 0 : false);
-            fis = new FileInputStream(new File(getDefaultedServiceAccountDirectory(), "ca.crt"));
+            fis = new FileInputStream(new File(getDefaultedServiceAccountDirectory(), CA_CRT));
             KeyStore keyStore = SecurityUtils.getDefaultKeyStore();
             try {
             	keyStore.size();
@@ -618,13 +619,13 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             	newAuthMgr = new GlobalMatrixAuthorizationStrategy();
             }
             
-            // we add the latest permissions instead of copy if a user from openshift (not predefined user), and we are logging in as that user
-            // we copy the permissions if it is a user from openshift that is not the user we are logging in as, or it is a predefined user
-            boolean addInsteadOfCopy = !classicDefaultJenkinsUsers.contains(info.getName());
             if (LOGGER.isLoggable(Level.FINE))
-            	LOGGER.fine(String.format("onSuccess: got users %s and permissions %s addInsteadOfCopy %s for user %s", usersGroups.toString(), permissionGroups.toString(), Boolean.toString(addInsteadOfCopy), info.getName()));
-            for (String userGroup : usersGroups) {                    	
-            	// copy any of the user's permissions from the prior auth mgr to our new one
+            	LOGGER.fine(String.format("onSuccess: got users %s and permissions %s where this user is %s", usersGroups.toString(), permissionGroups.toString(), info.getName()));
+            for (String userGroup : usersGroups) {
+                if (userGroup.equals(info.getName()))
+                    continue;
+                
+            	// copy any of the other users' permissions from the prior auth mgr to our new one
             	for (PermissionGroup pg : permissionGroups) {
             		for (Permission p : pg.getPermissions()) {
             			if (existingAuthMgr.hasPermission(userGroup, p)) {
@@ -634,36 +635,34 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             	}
             }
             
-        	if (addInsteadOfCopy) {
-            	if (LOGGER.isLoggable(Level.FINE))
-            		LOGGER.fine(String.format("onSuccess: adding permissions to new user %s based on openshift roles %s", info.getName(), allowedRoles));
-            	
-            	// map OpenShift user based on role to Jenkins user with analogous permissions
-            	if (allowedRoles.contains("view") || allowedRoles.contains("edit") || allowedRoles.contains("admin")) {
-	            	newAuthMgr.add(Hudson.READ, info.getName());
-	            	newAuthMgr.add(Item.READ, info.getName());
-	            	newAuthMgr.add(Item.DISCOVER, info.getName());
-            	}
-    			if (allowedRoles.contains("edit") || allowedRoles.contains("admin")) {
-    				newAuthMgr.add(Item.BUILD, info.getName());
-    				newAuthMgr.add(Item.CONFIGURE, info.getName());
-    				newAuthMgr.add(Item.CREATE, info.getName());
-    				newAuthMgr.add(Item.DELETE, info.getName());
-    				newAuthMgr.add(Item.WORKSPACE, info.getName());
-    				newAuthMgr.add(SCM.TAG, info.getName());
-    			}
-    			if (allowedRoles.contains("admin")) {
-    				newAuthMgr.add(Computer.CONFIGURE, info.getName());
-    				newAuthMgr.add(Computer.DELETE, info.getName());
-    				newAuthMgr.add(Hudson.ADMINISTER, info.getName());
-    				newAuthMgr.add(Hudson.READ, info.getName());
-    				newAuthMgr.add(Run.DELETE, info.getName());
-    				newAuthMgr.add(Run.UPDATE, info.getName());
-    				newAuthMgr.add(View.CONFIGURE, info.getName());
-    				newAuthMgr.add(View.CREATE, info.getName());
-    				newAuthMgr.add(View.DELETE, info.getName());
-    			}
+        	if (LOGGER.isLoggable(Level.FINE))
+        		LOGGER.fine(String.format("onSuccess: adding permissions to new user %s based on openshift roles %s", info.getName(), allowedRoles));
+        	
+        	// map OpenShift user based on role to Jenkins user with analogous permissions
+        	if (allowedRoles.contains("view") || allowedRoles.contains("edit") || allowedRoles.contains("admin")) {
+            	newAuthMgr.add(Hudson.READ, info.getName());
+            	newAuthMgr.add(Item.READ, info.getName());
+            	newAuthMgr.add(Item.DISCOVER, info.getName());
         	}
+			if (allowedRoles.contains("edit") || allowedRoles.contains("admin")) {
+				newAuthMgr.add(Item.BUILD, info.getName());
+				newAuthMgr.add(Item.CONFIGURE, info.getName());
+				newAuthMgr.add(Item.CREATE, info.getName());
+				newAuthMgr.add(Item.DELETE, info.getName());
+				newAuthMgr.add(Item.WORKSPACE, info.getName());
+				newAuthMgr.add(SCM.TAG, info.getName());
+			}
+			if (allowedRoles.contains("admin")) {
+				newAuthMgr.add(Computer.CONFIGURE, info.getName());
+				newAuthMgr.add(Computer.DELETE, info.getName());
+				newAuthMgr.add(Hudson.ADMINISTER, info.getName());
+				newAuthMgr.add(Hudson.READ, info.getName());
+				newAuthMgr.add(Run.DELETE, info.getName());
+				newAuthMgr.add(Run.UPDATE, info.getName());
+				newAuthMgr.add(View.CONFIGURE, info.getName());
+				newAuthMgr.add(View.CREATE, info.getName());
+				newAuthMgr.add(View.DELETE, info.getName());
+			}
 			
 			Jenkins.getInstance().setAuthorizationStrategy(newAuthMgr);
         }
