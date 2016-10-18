@@ -102,7 +102,7 @@ import jenkins.model.Jenkins;
  *
  */
 public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
-	static final Logger LOGGER = Logger.getLogger(OpenShiftOAuth2SecurityRealm.class.getName());
+    static final Logger LOGGER = Logger.getLogger(OpenShiftOAuth2SecurityRealm.class.getName());
 
     /**
      * OAuth 2 scope. This is enough to call a variety of userinfo api's.
@@ -129,6 +129,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     
     private static final String K8S_HOST_ENV_VAR = "KUBERNETES_SERVICE_HOST";
     private static final String K8S_PORT_ENV_VAR = "KUBERNETES_SERVICE_PORT";
+
+    private static final String LOGOUT = "logout";
+
+    static final String LOGGING_OUT = "loggingOut";
 
     /**
      * Global instance of the JSON factory.
@@ -727,6 +731,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     
     @Override
 	protected String getPostLogOutUrl(StaplerRequest req, Authentication auth) {
+        if (req.getRequestURL().toString().contains(LOGOUT))
+            req.getSession().setAttribute(LOGGING_OUT, LOGGING_OUT);
     	// there was a scenario when a user a) logged out of jenkins, and b) jenkins was restarted,
     	// where the various redirection query parameters on the logout url would result in a login
     	// going directly to the doFinishLogin path with no http session / oauth session available;
@@ -737,7 +743,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     	// By updating the post log out url here with this Jenkins plugin point (where we strip out the /logout suffix Jenkins applies
     	// and return the last success url the user accessed Jenkins with, we avoid the need for the 
     	// 2 login attempts after logout when jenkins is recycled in the interim.
-    	return req.getRequestURL().toString().replace("logout", "");
+    	return req.getRequestURL().toString().replace(LOGOUT, "");
 	}
 
 
