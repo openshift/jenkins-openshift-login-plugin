@@ -5,3 +5,5 @@ target/
 /.settings
 /Dockerfile-jenkins-test-new-plugin
 /jpi/
+/Dockerfile-jenkins-ext-oauth
+/sa/

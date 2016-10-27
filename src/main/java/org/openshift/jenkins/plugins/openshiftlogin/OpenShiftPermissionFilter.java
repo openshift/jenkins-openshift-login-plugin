@@ -64,6 +64,7 @@ public class OpenShiftPermissionFilter implements Filter {
 	public void doFilter(ServletRequest request, ServletResponse response,
 			FilterChain chain) throws IOException, ServletException {
 		try {
+		    boolean updated = OpenShiftSetOAuth.setOauth();
 			final HttpServletRequest httpRequest = (HttpServletRequest) request;
 			HttpSession s = httpRequest.getSession(false);
 			if (s != null) {
@@ -86,7 +87,7 @@ public class OpenShiftPermissionFilter implements Filter {
 								
 							}
 						}
-						if (System.currentTimeMillis() - lastPermissionPoll.longValue() > (interval * 1000)) {
+						if (updated || (System.currentTimeMillis() - lastPermissionPoll.longValue() > (interval * 1000))) {
 							OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins.getInstance().getSecurityRealm();
 							secRealm.updateAuthorizationStrategy(oauth);
 							s.setAttribute(OAuthSession.SESSION_NAME + LAST_SELF_SAR_POLL_TIME, new Long(System.currentTimeMillis()));
@@ -97,7 +98,7 @@ public class OpenShiftPermissionFilter implements Filter {
 				}
 			}
 		} finally {
-			chain.doFilter(request, response);
+			    chain.doFilter(request, response);
 		}
 	}
 
