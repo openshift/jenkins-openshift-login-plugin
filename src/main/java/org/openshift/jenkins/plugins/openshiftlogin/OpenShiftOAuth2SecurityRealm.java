@@ -247,7 +247,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         HttpTransport transport = HTTP_TRANSPORT;
         
         if (LOGGER.isLoggable(Level.FINE))
-        	LOGGER.fine(String.format("ctor: incoming args sa dir %s sa name %s svr prefix %s client id %s client secret %s redirectURL", serviceAccountDirectory, serviceAccountName, serverPrefix, clientId, clientSecret, redirectURL));
+        	LOGGER.fine(String.format("ctor: incoming args sa dir %s sa name %s svr prefix %s client id %s client secret %s redirectURL %s", serviceAccountDirectory, serviceAccountName, serverPrefix, clientId, clientSecret, redirectURL));
         
         String fixedServiceAccountDirectory = Util.fixEmpty(serviceAccountDirectory);
         this.clientId = Util.fixEmpty(clientId);
