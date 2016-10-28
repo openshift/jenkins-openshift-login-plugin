@@ -31,6 +31,9 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -327,6 +330,24 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             
             provider = getOpenShiftOAuthProvider(credential, transport);
             if (provider != null) {
+                // need to see if the public address returned is accessible from the jenkins pod (not guaranteed)
+                String ip = provider.issuer.replace("https://", "");
+                Socket s = new Socket();
+                try {
+                    String[] addr = ip.split(":");
+                    if (addr.length == 2) {
+                        InetSocketAddress endpoint = new InetSocketAddress(addr[0], new Integer(addr[1]));
+                        s.connect(endpoint, 30 * 1000);
+                    } else {
+                        InetSocketAddress endpoint = new InetSocketAddress(ip, 8443);
+                        s.connect(endpoint, 30 *1000);
+                    }
+                } catch (Throwable t) {
+                    LOGGER.log(Level.SEVERE,"OpenShift OAuth: the publically accessible endpoint returned by the OAuth server is not accessible from withing the Jenkins Pod", t);
+                    throw t;
+                } finally {
+                    s.close();
+                }
             	// the issuer is the public address of the k8s svc; use this vs. the hostname or ip/port that is only available within the cluster
             	this.defaultedRedirectURL = provider.issuer;
             	this.defaultedServerPrefix = provider.issuer;
