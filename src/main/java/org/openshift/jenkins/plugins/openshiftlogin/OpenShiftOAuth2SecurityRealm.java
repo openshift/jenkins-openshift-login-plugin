@@ -259,7 +259,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         else
         	this.clientSecret = null;
         
-        this.defaultedServerPrefix = DEFAULT_SVR_PREFIX;
+        this.defaultedServerPrefix = this.defaultedRedirectURL = DEFAULT_SVR_PREFIX;
         this.serverPrefix = Util.fixEmpty(serverPrefix);
         
         this.redirectURL = Util.fixEmpty(redirectURL);
@@ -330,33 +330,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             
             provider = getOpenShiftOAuthProvider(credential, transport);
             if (provider != null) {
-                // need to see if the public address returned is accessible from the jenkins pod (not guaranteed)
-                String ip = provider.issuer.replace("https://", "");
-                Socket s = new Socket();
-                try {
-                    String[] addr = ip.split(":");
-                    if (addr.length == 2) {
-                        InetSocketAddress endpoint = new InetSocketAddress(addr[0], new Integer(addr[1]));
-                        s.connect(endpoint, 30 * 1000);
-                    } else {
-                        InetSocketAddress endpoint = new InetSocketAddress(ip, 8443);
-                        s.connect(endpoint, 30 *1000);
-                    }
-                } catch (Throwable t) {
-                    LOGGER.log(Level.SEVERE,"OpenShift OAuth: the publically accessible endpoint returned by the OAuth server is not accessible from withing the Jenkins Pod", t);
-                    throw t;
-                } finally {
-                    s.close();
-                }
             	// the issuer is the public address of the k8s svc; use this vs. the hostname or ip/port that is only available within the cluster
             	this.defaultedRedirectURL = provider.issuer;
-            	this.defaultedServerPrefix = provider.issuer;
             }
-            //NOTE, the cluster ip/port available from K8S_HOST_ENV_VAR and K8S_PORT_ENV_VAR could be used to construct a usable redirect URL
-            //for local openshift master deployments where the browser is running on the same host; however, we are only defaulting to the safer
-            //option of the public IP/port/hostname obtained from contacting the oauth provider endpoint, hence we are prereqing the origin
-            //versions that have that endpoint available (1.4) to allow for using openshift oauth login without needing any manual configuration;
-            //users are older levels can still manually configure the cluster ip/port as the redirect url
         } catch (Throwable t) {
         	runningInOpenShiftPodWithRequiredOAuthFeatures = false;
         	if (LOGGER.isLoggable(Level.FINE))
@@ -575,7 +551,13 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
 
     protected OAuthSession newOAuthSession(String from, final String redirectOnFinish) {
-    	final GenericUrl tokenServerURL = provider != null ? new GenericUrl(provider.token_endpoint) : new GenericUrl(getDefaultedRedirectURL() + "/oauth/token");
+        // shout out to Cesar, while the auth server URL needs to be publicly accessible such that the browser
+        // can reference it, the token server URL does not;  see https://docs.oracle.com/cd/E50612_01/doc.11122/oauth_guide/content/oauth_flows.html
+        // for a good description of the flow;  as such, while the OAUTH_PROVIDER_URI endpoint returns a publicly accessible token server url, we 
+        // can't assume that is accessible from the jenkins pod (think running in a publicly accessible ec2 instance where the public facing address
+        // of the master is not accessible from within the cluster); so we only use the configured server prefix, where if not explicitly configured
+        // we go with the internally accessible default
+    	final GenericUrl tokenServerURL = new GenericUrl(getDefaultedServerPrefix() + "/oauth/token");
         final String authorizationServerURL = provider != null ? provider.authorization_endpoint : getDefaultedRedirectURL() +"/oauth/authorize";
         
         final AuthorizationCodeFlow flow = new AuthorizationCodeFlow.Builder(
