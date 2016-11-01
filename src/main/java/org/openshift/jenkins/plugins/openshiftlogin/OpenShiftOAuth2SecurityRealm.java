@@ -288,6 +288,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     
     boolean populateDefaults() throws IOException, GeneralSecurityException {
     	boolean runningInOpenShiftPodWithRequiredOAuthFeatures = EnvVars.masterEnvVars.get(K8S_HOST_ENV_VAR) != null && EnvVars.masterEnvVars.get(K8S_PORT_ENV_VAR) != null;
+        // we want to be verbose wrt error logging if we are at least running within a pod ... but if we know we are outside a pod, only
+    	// log if trace enabled 
+    	boolean withinAPod = runningInOpenShiftPodWithRequiredOAuthFeatures || (new File(getDefaultedServiceAccountDirectory())).exists();
         
         FileInputStream fis = null;
         BufferedReader br = null;
@@ -309,7 +312,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             transport = new NetHttpTransport.Builder().trustCertificates(keyStore).build();
         } catch (FileNotFoundException e) {
         	runningInOpenShiftPodWithRequiredOAuthFeatures = false;
-        	if (LOGGER.isLoggable(Level.FINE))
+        	if (LOGGER.isLoggable(Level.FINE) || withinAPod)
         		LOGGER.log(Level.FINE, "populatateDefaults", e);
         } finally {
         	if (fis != null)
@@ -332,10 +335,12 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             if (provider != null) {
             	// the issuer is the public address of the k8s svc; use this vs. the hostname or ip/port that is only available within the cluster
             	this.defaultedRedirectURL = provider.issuer;
+            } else {
+                runningInOpenShiftPodWithRequiredOAuthFeatures = false;
             }
         } catch (Throwable t) {
         	runningInOpenShiftPodWithRequiredOAuthFeatures = false;
-        	if (LOGGER.isLoggable(Level.FINE))
+        	if (LOGGER.isLoggable(Level.FINE) || withinAPod)
         		LOGGER.log(Level.FINE, "populateDefaults", t);
         }
         
@@ -351,6 +356,11 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         		runningInOpenShiftPodWithRequiredOAuthFeatures = true;
         	
         }
+        
+        if (withinAPod)
+            LOGGER.info(String.format("OpenShift OAuth returning %s with namespace %s SA dir %s default %s SA name %s default %s client ID %s default %s secret %s default %s redirect %s default %s server %s default %s", runningInOpenShiftPodWithRequiredOAuthFeatures, 
+                    this.namespace, this.serviceAccountDirectory, this.defaultedServiceAccountDirectory, this.serviceAccountName, this.defaultedServiceAccountName, this.clientId, this.defaultedClientId, 
+                    this.clientSecret, this.defaultedClientSecret, this.redirectURL, this.defaultedRedirectURL, this.serverPrefix, this.defaultedServerPrefix));
         
     	return runningInOpenShiftPodWithRequiredOAuthFeatures;        
     }

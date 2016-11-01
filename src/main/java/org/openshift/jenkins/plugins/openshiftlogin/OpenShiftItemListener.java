@@ -38,8 +38,6 @@ public class OpenShiftItemListener extends ItemListener {
 
 	@Override
 	public void onLoaded() {
-	    String enabled = EnvVars.masterEnvVars.get(OpenShiftSetOAuth.OPENSHIFT_ENABLE_OAUTH);
-        LOGGER.info("OpenShift OAuth: enable oauth set to " + enabled);
 	    OpenShiftSetOAuth.setOauth();
 	}
 

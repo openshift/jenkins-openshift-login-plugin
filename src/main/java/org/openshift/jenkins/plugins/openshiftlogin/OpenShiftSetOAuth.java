@@ -29,6 +29,7 @@ import hudson.security.SecurityRealm;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -36,36 +37,52 @@ import jenkins.model.Jenkins;
 
 public class OpenShiftSetOAuth {
 
-    static final Logger LOGGER = Logger.getLogger(OpenShiftSetOAuth.class.getName());
+    static final Logger LOGGER = Logger.getLogger(OpenShiftSetOAuth.class
+            .getName());
     static final String OPENSHIFT_ENABLE_OAUTH = "OPENSHIFT_ENABLE_OAUTH";
+    static long lastCheck = 0;
+
     static boolean setOauth() {
         final Jenkins jenkins = Jenkins.getInstance();
         String enabled = EnvVars.masterEnvVars.get(OPENSHIFT_ENABLE_OAUTH);
-        // we override the security realm with openshift oauth if running in an openshift pod
-        // and the correct env var is set on the pod during deployment (which our default templates now do)
-        if (jenkins != null && enabled != null && !enabled.equalsIgnoreCase("false")) {
+        // we override the security realm with openshift oauth if running in an
+        // openshift pod
+        // and the correct env var is set on the pod during deployment (which
+        // our default templates now do)
+        if (jenkins != null && enabled != null
+                && !enabled.equalsIgnoreCase("false")) {
             SecurityRealm priorSecurityRealm = jenkins.getSecurityRealm();
-            // if sec realm already openshift ouath, it has been explicitly configured, so leave alone
+            // if sec realm already openshift ouath, it has been explicitly
+            // configured, so leave alone
             if (!(priorSecurityRealm instanceof OpenShiftOAuth2SecurityRealm)) {
-                LOGGER.info("OpenShift OAuth: enable oauth set to " + enabled);
-                LOGGER.info("OpenShift OAuth: configured security realm on startup: " + priorSecurityRealm);
-                try {
-                    final OpenShiftOAuth2SecurityRealm osrealm = new OpenShiftOAuth2SecurityRealm(null, null, null, null, null, null);
-                    boolean inOpenShiftPod = false;
-                    try {
-                        inOpenShiftPod = osrealm.populateDefaults();
-                    } catch (Throwable t) {
-                        if (LOGGER.isLoggable(Level.FINE))
-                            LOGGER.log(Level.FINE, "OpenShiftItemListener", t);
+                synchronized (OpenShiftSetOAuth.class) {
+                    if (System.currentTimeMillis() > lastCheck + 60000) {
+                        LOGGER.info("OpenShift OAuth: enable oauth set to " + enabled);
+                        LOGGER.info("OpenShift OAuth: configured security realm on startup: "
+                                + priorSecurityRealm + " last check " + new Date(lastCheck));
+                        lastCheck = System.currentTimeMillis();
+                        try {
+                            final OpenShiftOAuth2SecurityRealm osrealm = new OpenShiftOAuth2SecurityRealm(
+                                    null, null, null, null, null, null);
+                            boolean inOpenShiftPod = false;
+                            try {
+                                inOpenShiftPod = osrealm.populateDefaults();
+                            } catch (Throwable t) {
+                                if (LOGGER.isLoggable(Level.FINE))
+                                    LOGGER.log(Level.FINE,
+                                            "OpenShiftItemListener", t);
+                            }
+                            LOGGER.info("OpenShift OAuth: running in OpenShift pod with required OAuth features: "
+                                    + inOpenShiftPod);
+                            if (inOpenShiftPod) {
+                                jenkins.setSecurityRealm(osrealm);
+                                LOGGER.info("OpenShift OAuth: Jenkins security realm set to OpenShift OAuth");
+                                return true;
+                            }
+                        } catch (IOException e1) {
+                        } catch (GeneralSecurityException e1) {
+                        }
                     }
-                    LOGGER.info("OpenShift OAuth: running in OpenShift pod with required OAuth features: " + inOpenShiftPod);
-                    if (inOpenShiftPod) {
-                        jenkins.setSecurityRealm(osrealm);
-                        LOGGER.info("OpenShift OAuth: Jenkins security realm set to OpenShift OAuth");
-                        return true;
-                    }
-                } catch (IOException e1) {
-                } catch (GeneralSecurityException e1) {
                 }
             }
         }
