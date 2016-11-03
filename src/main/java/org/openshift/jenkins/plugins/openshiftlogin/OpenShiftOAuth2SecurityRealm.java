@@ -259,7 +259,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         else
         	this.clientSecret = null;
         
-        this.defaultedServerPrefix = this.defaultedRedirectURL = DEFAULT_SVR_PREFIX;
+        this.defaultedServerPrefix = DEFAULT_SVR_PREFIX;
         this.serverPrefix = Util.fixEmpty(serverPrefix);
         
         this.redirectURL = Util.fixEmpty(redirectURL);
@@ -283,7 +283,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 		}
         
         if (LOGGER.isLoggable(Level.FINE))
-        	LOGGER.fine(String.format("ctor: derived default client id %s client secret %s sa dir %s redirect url %s transport %s", defaultedClientId, defaultedClientSecret, defaultedServiceAccountDirectory, defaultedRedirectURL, transport));
+        	LOGGER.fine(String.format("ctor: derived default client id %s client secret %s sa dir %s transport %s", defaultedClientId, defaultedClientSecret, defaultedServiceAccountDirectory, transport));
     }
     
     boolean populateDefaults() throws IOException, GeneralSecurityException {
@@ -332,6 +332,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             defaultedClientId = "system:serviceaccount:"+namespace+":"+getDefaultedServiceAccountName();
             
             provider = getOpenShiftOAuthProvider(credential, transport);
+            if (withinAPod)
+                LOGGER.info(String.format("OpenShift OAuth: provider: %s", provider));
             if (provider != null) {
             	// the issuer is the public address of the k8s svc; use this vs. the hostname or ip/port that is only available within the cluster
             	this.defaultedRedirectURL = provider.issuer;
@@ -568,7 +570,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         // of the master is not accessible from within the cluster); so we only use the configured server prefix, where if not explicitly configured
         // we go with the internally accessible default
     	final GenericUrl tokenServerURL = new GenericUrl(getDefaultedServerPrefix() + "/oauth/token");
-        final String authorizationServerURL = provider != null ? provider.authorization_endpoint : getDefaultedRedirectURL() +"/oauth/authorize";
+        final String authorizationServerURL = getDefaultedRedirectURL() +"/oauth/authorize";
         
         final AuthorizationCodeFlow flow = new AuthorizationCodeFlow.Builder(
                 BearerToken.queryParameterAccessMethod(), transport, JSON_FACTORY, tokenServerURL,

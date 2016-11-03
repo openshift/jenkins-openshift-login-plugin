@@ -66,5 +66,12 @@ public class OpenShiftProviderInfo {
 	
 	@Key
 	public String token_endpoint;
+
+    @Override
+    public String toString() {
+        return "OpenShiftProviderInfo: issuer: " + issuer + " auth ep: " + authorization_endpoint + " token ep: " + token_endpoint;
+    }
+	
+	
 	
 }
