@@ -342,8 +342,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             }
         } catch (Throwable t) {
         	runningInOpenShiftPodWithRequiredOAuthFeatures = false;
-        	if (LOGGER.isLoggable(Level.FINE) || withinAPod)
+        	if (LOGGER.isLoggable(Level.FINE))
         		LOGGER.log(Level.FINE, "populateDefaults", t);
+        	else if (withinAPod)
+        	    LOGGER.log(Level.INFO, "populateDefaults", t);
         }
         
         
