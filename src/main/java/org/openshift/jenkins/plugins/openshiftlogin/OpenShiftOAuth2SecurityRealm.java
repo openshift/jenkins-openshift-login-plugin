@@ -670,6 +670,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 				newAuthMgr.add(Item.DELETE, info.getName());
 				newAuthMgr.add(Item.WORKSPACE, info.getName());
 				newAuthMgr.add(SCM.TAG, info.getName());
+				newAuthMgr.add(Jenkins.RUN_SCRIPTS, info.getName());
 			}
 			if (allowedRoles.contains("admin")) {
 				newAuthMgr.add(Computer.CONFIGURE, info.getName());
