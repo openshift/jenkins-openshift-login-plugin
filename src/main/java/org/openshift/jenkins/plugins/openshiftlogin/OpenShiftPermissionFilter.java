@@ -64,7 +64,7 @@ public class OpenShiftPermissionFilter implements Filter {
 	public void doFilter(ServletRequest request, ServletResponse response,
 			FilterChain chain) throws IOException, ServletException {
 		try {
-		    boolean updated = OpenShiftSetOAuth.setOauth();
+		    boolean updated = OpenShiftSetOAuth.setOauth(false);
 			final HttpServletRequest httpRequest = (HttpServletRequest) request;
 			HttpSession s = httpRequest.getSession(false);
 			if (s != null) {

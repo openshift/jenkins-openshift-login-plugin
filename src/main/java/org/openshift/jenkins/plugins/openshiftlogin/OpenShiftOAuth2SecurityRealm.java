@@ -656,8 +656,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             	}
             }
             
-        	if (LOGGER.isLoggable(Level.FINE))
-        		LOGGER.fine(String.format("onSuccess: adding permissions to new user %s based on openshift roles %s", info.getName(), allowedRoles));
+       		LOGGER.info(String.format("OpenShift OAuth: adding permissions to user %s based on OpenShift roles %s", info.getName(), allowedRoles));
         	
         	// map OpenShift user based on role to Jenkins user with analogous permissions
         	if (allowedRoles.contains("view") || allowedRoles.contains("edit") || allowedRoles.contains("admin")) {
@@ -687,6 +686,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 			}
 			
 			Jenkins.getInstance().setAuthorizationStrategy(newAuthMgr);
+			
+			Jenkins.getInstance().save();
+			u.save();
         }
     }
     
