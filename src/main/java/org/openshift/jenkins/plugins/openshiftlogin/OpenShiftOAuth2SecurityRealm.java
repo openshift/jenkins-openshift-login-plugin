@@ -62,6 +62,7 @@ import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 
+import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.ClientParametersAuthentication;
@@ -663,6 +664,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             	newAuthMgr.add(Hudson.READ, info.getName());
             	newAuthMgr.add(Item.READ, info.getName());
             	newAuthMgr.add(Item.DISCOVER, info.getName());
+            	newAuthMgr.add(CredentialsProvider.VIEW, info.getName());
         	}
 			if (allowedRoles.contains("edit") || allowedRoles.contains("admin")) {
 				newAuthMgr.add(Item.BUILD, info.getName());
@@ -683,6 +685,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 				newAuthMgr.add(View.CONFIGURE, info.getName());
 				newAuthMgr.add(View.CREATE, info.getName());
 				newAuthMgr.add(View.DELETE, info.getName());
+                newAuthMgr.add(CredentialsProvider.CREATE, info.getName());
+                newAuthMgr.add(CredentialsProvider.UPDATE, info.getName());
+                newAuthMgr.add(CredentialsProvider.DELETE, info.getName());
+                newAuthMgr.add(CredentialsProvider.MANAGE_DOMAINS, info.getName());             
 			}
 			
 			Jenkins.getInstance().setAuthorizationStrategy(newAuthMgr);
