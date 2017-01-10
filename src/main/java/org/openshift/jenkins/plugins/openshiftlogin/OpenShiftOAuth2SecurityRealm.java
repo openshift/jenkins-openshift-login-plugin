@@ -125,7 +125,6 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private static final String LOGIN_URL = "securityRealm/commenceLogin";
     
     private static final String[] ROLES = new String[]{"admin", "edit", "view"};
-    private static final String[] CLASSIC_DEFAULT_JENKINS_USERS = new String[]{"admin", "system_builder", "view", "Anonymous"};
     
     private static final String USER_URI = "/oapi/v1/users/~";
     private static final String SAR_URI = "/oapi/v1/subjectaccessreviews";
@@ -146,11 +145,6 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
     
     private static final Object USER_UPDATE_LOCK = new Object();
-    
-    private static List<String> classicDefaultJenkinsUsers = new ArrayList<String>();
-    static {
-    	classicDefaultJenkinsUsers = Arrays.asList(CLASSIC_DEFAULT_JENKINS_USERS);
-    }
     
     /**
      * Control the redirection URL for this realm. Exposed for testing.
@@ -246,6 +240,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
      */
     private OpenShiftProviderInfo provider;
     
+    private OpenShiftPermissionFilter filter;
+    
     @DataBoundConstructor
     public OpenShiftOAuth2SecurityRealm(String serviceAccountDirectory, String serviceAccountName, String serverPrefix, String clientId, String clientSecret, String redirectURL) throws IOException, GeneralSecurityException {
         HttpTransport transport = HTTP_TRANSPORT;
@@ -277,21 +273,36 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         else
         	populateDefaults();
     	
-        try {
-			hudson.util.PluginServletFilter.addFilter(new OpenShiftPermissionFilter());
-		} catch (ServletException e) {
-			LOGGER.log(Level.SEVERE, "ctor", e);
-		}
-        
         if (LOGGER.isLoggable(Level.FINE))
         	LOGGER.fine(String.format("ctor: derived default client id %s client secret %s sa dir %s transport %s", defaultedClientId, defaultedClientSecret, defaultedServiceAccountDirectory, transport));
     }
     
+    /*
+     * Note, a fair amount of investigation was done into leveraging the hudson.security.SecurityRealm.createFilter(FilterConfig) extension
+     * point.  However, quite a bit of tight coupling with assumed behavior in the jenkins core wrt the other security features and servlet filtering
+     * arose.  Hence, we are sticking with the hudson.util.PluginServletFilter.addFilter(Filter) path.
+     */
+    synchronized void createFilter() {
+        // restarts on things like plugin upgrade bypassed the call to the constructor, so filter initialization
+        // has to be driven in-line; note, after initial bring up, the filter variable will be set after subsequent
+        // jenkins restarts, but the addFilter call needs to be made on each restart, so we check flag to see if the filter
+        // has been ran through at least once
+        if (filter == null || !filter.initCalled) {
+            try {
+                filter = new OpenShiftPermissionFilter();
+                hudson.util.PluginServletFilter.addFilter(filter);
+            } catch (ServletException e) {
+                LOGGER.log(Level.SEVERE, "createFilter", e);
+            }
+        }
+    }
+    
     boolean populateDefaults() throws IOException, GeneralSecurityException {
-    	boolean runningInOpenShiftPodWithRequiredOAuthFeatures = EnvVars.masterEnvVars.get(K8S_HOST_ENV_VAR) != null && EnvVars.masterEnvVars.get(K8S_PORT_ENV_VAR) != null;
+        createFilter();
+        boolean runningInOpenShiftPodWithRequiredOAuthFeatures = EnvVars.masterEnvVars.get(K8S_HOST_ENV_VAR) != null && EnvVars.masterEnvVars.get(K8S_PORT_ENV_VAR) != null;
         // we want to be verbose wrt error logging if we are at least running within a pod ... but if we know we are outside a pod, only
-    	// log if trace enabled 
-    	boolean withinAPod = runningInOpenShiftPodWithRequiredOAuthFeatures || (new File(getDefaultedServiceAccountDirectory())).exists();
+        // log if trace enabled 
+        boolean withinAPod = runningInOpenShiftPodWithRequiredOAuthFeatures || (new File(getDefaultedServiceAccountDirectory())).exists();
         
         FileInputStream fis = null;
         BufferedReader br = null;
@@ -437,10 +448,6 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     public String getDefaultedNamespace() {
     	return namespace;
     }
-    /*
-     *     public OpenShiftOAuth2SecurityRealm(String serviceAccountDirectory, String serviceAccountName, String serverPrefix, String clientId, String clientSecret, String redirectURL) throws IOException, GeneralSecurityException {
-
-     */
     
     
 
@@ -591,7 +598,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                             flow.newTokenRequest(authorizationCode).setRedirectUri(buildOAuthRedirectUrl(redirectOnFinish)));
                     final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod()).setFromTokenResponse(response);
                 	this.setCredential(credential);
-                    secRealm.updateAuthorizationStrategy(this);
+                    secRealm.updateAuthorizationStrategy(credential);
                             			
                     return new HttpRedirect(redirectOnFinish);
 
@@ -605,97 +612,134 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         };
     }
     
-    public void updateAuthorizationStrategy(OAuthSession oauth) throws IOException, GeneralSecurityException {
+    public UsernamePasswordAuthenticationToken updateAuthorizationStrategy(Credential credential) throws IOException, GeneralSecurityException {
     	populateDefaults();
-        OpenShiftUserInfo info = getOpenShiftUserInfo(oauth.getCredential(), transport);
-        Set<String> allowedRoles = postSAR(oauth.getCredential(), transport);
+        OpenShiftUserInfo info = getOpenShiftUserInfo(credential, transport);
+        Set<String> allowedRoles = postSAR(credential, transport);
         GrantedAuthority[] authorities = new GrantedAuthority[] {SecurityRealm.AUTHENTICATED_AUTHORITY};
-        // logs this user in.
-        UsernamePasswordAuthenticationToken token =
-                new UsernamePasswordAuthenticationToken(info.getName(), "", authorities);
-        SecurityContextHolder.getContext().setAuthentication(token);
-        
-        // So if you look at GlobalSecurityConfiguration and GlobalMatrixAuthorizationStrategy (including its DescriptorImpl)
-        // and the associated config.jelly files,
-        // you'll see that the AuthourizationStrategy object stored in Jenkins is *essentially* immutable (except for adds, with comments saying only to use durin contruction), 
-        // and that when users manipulate 
-        // the panel "Configure Global Security", new instances of Global/ProjectMatrixAuthorizationStrategy are created, where
-        // existing users are set up again.
-        // we'll mimic what the "Configure Global Security" config page does                                        
-        
-        User u = User.get(token.getName());
-        info.updateProfile(u);
-        
-        //NOTE, Jenkins currently does not employ any sort of synchronization around their paths for updating the authorization strategy;
-        //However, with user login now driving the addition of users and ther permissions, that does not seem prudent when users are 
-        //logging in concurrently.
-
-        synchronized(USER_UPDATE_LOCK) {
-        	GlobalMatrixAuthorizationStrategy existingAuthMgr = (GlobalMatrixAuthorizationStrategy) Jenkins.getInstance().getAuthorizationStrategy();
-        	Set<String> usersGroups = existingAuthMgr.getGroups();
-            List<PermissionGroup> permissionGroups = new ArrayList<PermissionGroup>(PermissionGroup.getAll());
-            GlobalMatrixAuthorizationStrategy newAuthMgr = null;
-            if (existingAuthMgr instanceof ProjectMatrixAuthorizationStrategy) {
-            	newAuthMgr = new ProjectMatrixAuthorizationStrategy();
-            } else {
-            	newAuthMgr = new GlobalMatrixAuthorizationStrategy();
-            }
-            
-            if (LOGGER.isLoggable(Level.FINE))
-            	LOGGER.fine(String.format("onSuccess: got users %s and permissions %s where this user is %s", usersGroups.toString(), permissionGroups.toString(), info.getName()));
-            for (String userGroup : usersGroups) {
-                if (userGroup.equals(info.getName()))
-                    continue;
                 
-            	// copy any of the other users' permissions from the prior auth mgr to our new one
-            	for (PermissionGroup pg : permissionGroups) {
-            		for (Permission p : pg.getPermissions()) {
-            			if (existingAuthMgr.hasPermission(userGroup, p)) {
-            				newAuthMgr.add(p, userGroup);
-            			}
-            		}
-            	}
-            }
+        // we append the role suffix to the name stored into Jenkins, since a given user is able to log in at varying scope/permission
+        // levels in openshift; however, for now, we make sure the display name for Jenkins does not include this suffix
+        String suffix = null;
+        if (allowedRoles.contains("admin"))
+            suffix = "-admin";
+        else if (allowedRoles.contains("edit"))
+            suffix = "-edit";
+        else if (allowedRoles.contains("view"))
+            suffix = "-view";
+        
+        // logs this user in.... with the index of UsernamePasswordAuthenticationToken token being matrixKey, that will tell jenkins auth
+        // code down the line what permissions to map to, where there 3 permissions for each user possible, where the key for that permission
+        // is the username appended by -admin, -edit, or -view
+        // NOTE, if all three self-sars fail, where it has no permission entries in the jenkins auth matrix, we don't update the security ctx, 
+        // and leave the user as the jenkins anonymous user;  that way, a malicious 
+        // user can't say create a "foo-admin" user, and get user foo's admin permission; note, if "foo-admin" has say view access, then his permission key via this token and matrixKey
+        // will be "foo-admin-view", and only have the jenkins permissions we've assigned to the view role
+        UsernamePasswordAuthenticationToken token = null;
+        if (suffix != null) {
+            String matrixKey = info.getName() + suffix;
+            token = new UsernamePasswordAuthenticationToken(matrixKey, "", authorities);
+            SecurityContextHolder.getContext().setAuthentication(token);
             
-       		LOGGER.info(String.format("OpenShift OAuth: adding permissions to user %s based on OpenShift roles %s", info.getName(), allowedRoles));
-        	
-        	// map OpenShift user based on role to Jenkins user with analogous permissions
-        	if (allowedRoles.contains("view") || allowedRoles.contains("edit") || allowedRoles.contains("admin")) {
-            	newAuthMgr.add(Hudson.READ, info.getName());
-            	newAuthMgr.add(Item.READ, info.getName());
-            	newAuthMgr.add(Item.DISCOVER, info.getName());
-            	newAuthMgr.add(CredentialsProvider.VIEW, info.getName());
-        	}
-			if (allowedRoles.contains("edit") || allowedRoles.contains("admin")) {
-				newAuthMgr.add(Item.BUILD, info.getName());
-				newAuthMgr.add(Item.CONFIGURE, info.getName());
-				newAuthMgr.add(Item.CREATE, info.getName());
-				newAuthMgr.add(Item.DELETE, info.getName());
-				newAuthMgr.add(Item.WORKSPACE, info.getName());
-				newAuthMgr.add(SCM.TAG, info.getName());
-				newAuthMgr.add(Jenkins.RUN_SCRIPTS, info.getName());
-			}
-			if (allowedRoles.contains("admin")) {
-				newAuthMgr.add(Computer.CONFIGURE, info.getName());
-				newAuthMgr.add(Computer.DELETE, info.getName());
-				newAuthMgr.add(Hudson.ADMINISTER, info.getName());
-				newAuthMgr.add(Hudson.READ, info.getName());
-				newAuthMgr.add(Run.DELETE, info.getName());
-				newAuthMgr.add(Run.UPDATE, info.getName());
-				newAuthMgr.add(View.CONFIGURE, info.getName());
-				newAuthMgr.add(View.CREATE, info.getName());
-				newAuthMgr.add(View.DELETE, info.getName());
-                newAuthMgr.add(CredentialsProvider.CREATE, info.getName());
-                newAuthMgr.add(CredentialsProvider.UPDATE, info.getName());
-                newAuthMgr.add(CredentialsProvider.DELETE, info.getName());
-                newAuthMgr.add(CredentialsProvider.MANAGE_DOMAINS, info.getName());             
-			}
-			
-			Jenkins.getInstance().setAuthorizationStrategy(newAuthMgr);
-			
-			Jenkins.getInstance().save();
-			u.save();
+            User u = User.get(token.getName());
+            info.updateProfile(u);
+            // this controls the user name that is displayed atop the Jenkins browser window;
+            // we'll display the "core" user name without the admin/edit/view suffix
+            u.setFullName(info.getName());
+            u.save();
+            
+            // So if you look at GlobalSecurityConfiguration and GlobalMatrixAuthorizationStrategy (including its DescriptorImpl)
+            // and the associated config.jelly files,
+            // you'll see that the AuthourizationStrategy object stored in Jenkins is *essentially* immutable (except for adds, with comments saying only to use durin contruction), 
+            // and that when users manipulate 
+            // the panel "Configure Global Security", new instances of Global/ProjectMatrixAuthorizationStrategy are created, where
+            // existing users are set up again.
+            // we'll mimic what the "Configure Global Security" config page does                                        
+            
+            //NOTE, Jenkins currently does not employ any sort of synchronization around their paths for updating the authorization strategy;
+            //However, with user login now driving the addition of users and their permissions, that does not seem prudent when users are 
+            //logging in concurrently.
+
+            synchronized(USER_UPDATE_LOCK) {
+                GlobalMatrixAuthorizationStrategy existingAuthMgr = (GlobalMatrixAuthorizationStrategy) Jenkins.getInstance().getAuthorizationStrategy();
+                Set<String> usersGroups = existingAuthMgr.getGroups();
+                
+                if (LOGGER.isLoggable(Level.FINE))
+                    LOGGER.fine(String.format("updateAuthorizationStrategy: got users %s where this user is %s", usersGroups.toString(), info.getName()));
+                
+                if (usersGroups.contains(matrixKey)) {
+                    // since we store username-maxrole in the auth matrix, we can infer that since this user-role pair already exists as a key, there is no need to update the matrix
+                    // since our permissions are still the same on the openshift side
+                    LOGGER.info(String.format("OpenShift OAuth: user %s, stored in the matrix as %s, based on OpenShift roles %s already exists in Jenkins", info.getName(), matrixKey, allowedRoles));
+                } else {
+                    List<PermissionGroup> permissionGroups = new ArrayList<PermissionGroup>(PermissionGroup.getAll());
+                    if (LOGGER.isLoggable(Level.FINE))
+                        LOGGER.fine(String.format("updateAuthorizationStrategy: permissions %s", permissionGroups.toString()));
+                    
+                    GlobalMatrixAuthorizationStrategy newAuthMgr = null;
+                    if (existingAuthMgr instanceof ProjectMatrixAuthorizationStrategy) {
+                        newAuthMgr = new ProjectMatrixAuthorizationStrategy();
+                    } else {
+                        newAuthMgr = new GlobalMatrixAuthorizationStrategy();
+                    }
+
+                    for (String userGroup : usersGroups) {                
+                        // copy any of the other users' permissions from the prior auth mgr to our new one
+                        for (PermissionGroup pg : permissionGroups) {
+                            for (Permission p : pg.getPermissions()) {
+                                if (existingAuthMgr.hasPermission(userGroup, p)) {
+                                    newAuthMgr.add(p, userGroup);
+                                }
+                            }
+                        }
+                        LOGGER.info(String.format("OpenShift OAuth: adding permissions for user %s, stored in the matrix as %s, based on OpenShift roles %s", info.getName(), matrixKey, allowedRoles));
+                        
+                        // map OpenShift user based on role to Jenkins user with analogous permissions
+                        if (allowedRoles.contains("view") || allowedRoles.contains("edit") || allowedRoles.contains("admin")) {
+                            newAuthMgr.add(Hudson.READ, matrixKey);
+                            newAuthMgr.add(Item.READ, matrixKey);
+                            newAuthMgr.add(Item.DISCOVER, matrixKey);
+                            newAuthMgr.add(CredentialsProvider.VIEW, matrixKey);
+                        }
+                        if (allowedRoles.contains("edit") || allowedRoles.contains("admin")) {
+                            newAuthMgr.add(Item.BUILD, matrixKey);
+                            newAuthMgr.add(Item.CONFIGURE, matrixKey);
+                            newAuthMgr.add(Item.CREATE, matrixKey);
+                            newAuthMgr.add(Item.DELETE, matrixKey);
+                            newAuthMgr.add(Item.WORKSPACE, matrixKey);
+                            newAuthMgr.add(SCM.TAG, matrixKey);
+                            newAuthMgr.add(Jenkins.RUN_SCRIPTS, matrixKey);
+                        }
+                        if (allowedRoles.contains("admin")) {
+                            newAuthMgr.add(Computer.CONFIGURE, matrixKey);
+                            newAuthMgr.add(Computer.DELETE, matrixKey);
+                            newAuthMgr.add(Hudson.ADMINISTER, matrixKey);
+                            newAuthMgr.add(Hudson.READ, matrixKey);
+                            newAuthMgr.add(Run.DELETE, matrixKey);
+                            newAuthMgr.add(Run.UPDATE, matrixKey);
+                            newAuthMgr.add(View.CONFIGURE, matrixKey);
+                            newAuthMgr.add(View.CREATE, matrixKey);
+                            newAuthMgr.add(View.DELETE, matrixKey);
+                            newAuthMgr.add(CredentialsProvider.CREATE, matrixKey);
+                            newAuthMgr.add(CredentialsProvider.UPDATE, matrixKey);
+                            newAuthMgr.add(CredentialsProvider.DELETE, matrixKey);
+                            newAuthMgr.add(CredentialsProvider.MANAGE_DOMAINS, matrixKey);             
+                        }
+                        
+                    }
+                    
+                    if (newAuthMgr != null) {
+                        Jenkins.getInstance().setAuthorizationStrategy(newAuthMgr);                
+                        Jenkins.getInstance().save();
+                    }
+                }
+                
+                
+            }
         }
+         
+        
+        return token;
     }
     
     /**
