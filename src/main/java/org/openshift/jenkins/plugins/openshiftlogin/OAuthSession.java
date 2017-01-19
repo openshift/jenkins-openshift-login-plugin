@@ -103,7 +103,7 @@ public abstract class OAuthSession {
         }
         AuthorizationCodeResponseUrl responseUrl = new AuthorizationCodeResponseUrl(buf.toString());
         if (! uuid.equals(responseUrl.getState())) {
-            return HttpResponses.error(401, "State is invalid");
+            return HttpResponses.error(401, "State is invalid; uuid == " + uuid + " resp state == " + responseUrl.getState());
         }
         String code = responseUrl.getCode();
         if (responseUrl.getError() != null) {
