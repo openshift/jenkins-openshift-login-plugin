@@ -5,9 +5,9 @@ A Jenkins plugin which lets you login to Jenkins with your account on your OpenS
 
 
 The primary scenario is using this plugin when Jenkins is running in a OpenShift pod, and the jobs with Jenkins operate against the
-same OpenShift cluster that Jenkins is running in.  In this scenario, no additional configuration is required.
+same OpenShift cluster that Jenkins is running in.  In this scenario, no additional configuration is required, but you must be running agaist v1.4 of OpenShift/Origin (https://github.com/openshift/origin/tree/release-1.4).
 
-For development purposes, or for scenarios where the OpenShift pod defaults do not apply, configuration parameters are:
+Otherwise, for development purposes, or for scenarios where the OpenShift pod defaults do not apply, the configuration parameters are:
 
 * service account directory:  The directory to load service account information from. Three files are referenced:  'namespace', 'ca.crt', and 'token'. They correspond to the OpenShift project, certificate, and authentication token for the service account.
 * service account name:  override for the service account name used when authenticating users against OAuth (default derived from token / client secret)
