@@ -135,7 +135,7 @@ public class OpenShiftPermissionFilter implements Filter {
 						OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.SEVERE, "filter", t);
 					}
 				}
-			} else {
+			} else if (Jenkins.getInstance().getSecurityRealm() instanceof OpenShiftOAuth2SecurityRealm) {
 			    // support for non-browser, like curl, access to jenkins with openshift oauth security;
 			    // by choice, not storing auth in http session (remember, no browser) or anything like that;
 			    // want the token provided on each access 
