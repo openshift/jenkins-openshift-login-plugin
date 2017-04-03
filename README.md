@@ -15,3 +15,12 @@ Otherwise, for development purposes, or for scenarios where the OpenShift pod de
 * redirect URL: URL for the OpenShift API server
 * client ID:  override for the ID for the OpenShift OAuth client (default derived from service account information)
 * client secret:  override for the service account token (to change permissions for the OAuth client during the OAuth authentication flows)
+
+NOTE:  On the OAuth redirect flow during login from a browser, the construction of the redirect URL back to Jenkins when
+authentication is successful examines the following elements in this order:
+
+* first the `from` query parameter of the initial login URL is examined to see if it is a valid URL
+* second the `referer` header of the initial login URL is examined to see if it is a valid URL
+* lastly, the root URL for the Jenkins instance is used; if you have explicitly configured a root URL for your Jenkins
+server, then you must ensure that URL has been added to the OAuth list of allowed redirect URLs on the service account
+used for authenticating users 
