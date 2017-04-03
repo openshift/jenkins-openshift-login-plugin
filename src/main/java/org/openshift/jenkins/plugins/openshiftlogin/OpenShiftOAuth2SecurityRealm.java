@@ -31,9 +31,8 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.Socket;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -247,34 +246,34 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         HttpTransport transport = HTTP_TRANSPORT;
         
         if (LOGGER.isLoggable(Level.FINE))
-        	LOGGER.fine(String.format("ctor: incoming args sa dir %s sa name %s svr prefix %s client id %s client secret %s redirectURL %s", serviceAccountDirectory, serviceAccountName, serverPrefix, clientId, clientSecret, redirectURL));
+            LOGGER.fine(String.format("ctor: incoming args sa dir %s sa name %s svr prefix %s client id %s client secret %s redirectURL %s", serviceAccountDirectory, serviceAccountName, serverPrefix, clientId, clientSecret, redirectURL));
         
         String fixedServiceAccountDirectory = Util.fixEmpty(serviceAccountDirectory);
         this.clientId = Util.fixEmpty(clientId);
         if (Util.fixEmpty(clientSecret) != null)
-        	this.clientSecret = Secret.fromString(clientSecret);
+            this.clientSecret = Secret.fromString(clientSecret);
         else
-        	this.clientSecret = null;
+            this.clientSecret = null;
         
         this.defaultedServerPrefix = DEFAULT_SVR_PREFIX;
         this.serverPrefix = Util.fixEmpty(serverPrefix);
         
         this.redirectURL = Util.fixEmpty(redirectURL);
         
-		this.defaultedServiceAccountDirectory = DEFAULT_SVC_ACCT_DIR;
-    	this.serviceAccountDirectory = fixedServiceAccountDirectory;
-    	
+        this.defaultedServiceAccountDirectory = DEFAULT_SVC_ACCT_DIR;
+        this.serviceAccountDirectory = fixedServiceAccountDirectory;
+        
         this.serviceAccountName = Util.fixEmpty(serviceAccountName);
                 
         this.transport = transport;
         
         if (testTransport != null)
-        	this.transport = testTransport;
+            this.transport = testTransport;
         else
-        	populateDefaults();
-    	
+            populateDefaults();
+        
         if (LOGGER.isLoggable(Level.FINE))
-        	LOGGER.fine(String.format("ctor: derived default client id %s client secret %s sa dir %s transport %s", defaultedClientId, defaultedClientSecret, defaultedServiceAccountDirectory, transport));
+            LOGGER.fine(String.format("ctor: derived default client id %s client secret %s sa dir %s transport %s", defaultedClientId, defaultedClientSecret, defaultedServiceAccountDirectory, transport));
     }
     
     /*
@@ -307,30 +306,30 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         FileInputStream fis = null;
         BufferedReader br = null;
         try {
-        	br = new BufferedReader(new FileReader(new File(getDefaultedServiceAccountDirectory(), NAMESPACE)));
-        	namespace = br.readLine();
-        	runningInOpenShiftPodWithRequiredOAuthFeatures = runningInOpenShiftPodWithRequiredOAuthFeatures && (namespace != null ? namespace.length() > 0 : false);
-        	br = new BufferedReader(new FileReader(new File(getDefaultedServiceAccountDirectory(), TOKEN)));
-        	defaultedClientSecret = br.readLine();
-        	runningInOpenShiftPodWithRequiredOAuthFeatures = runningInOpenShiftPodWithRequiredOAuthFeatures && (defaultedClientSecret != null ? defaultedClientSecret.length() > 0 : false);
+            br = new BufferedReader(new FileReader(new File(getDefaultedServiceAccountDirectory(), NAMESPACE)));
+            namespace = br.readLine();
+            runningInOpenShiftPodWithRequiredOAuthFeatures = runningInOpenShiftPodWithRequiredOAuthFeatures && (namespace != null ? namespace.length() > 0 : false);
+            br = new BufferedReader(new FileReader(new File(getDefaultedServiceAccountDirectory(), TOKEN)));
+            defaultedClientSecret = br.readLine();
+            runningInOpenShiftPodWithRequiredOAuthFeatures = runningInOpenShiftPodWithRequiredOAuthFeatures && (defaultedClientSecret != null ? defaultedClientSecret.length() > 0 : false);
             fis = new FileInputStream(new File(getDefaultedServiceAccountDirectory(), CA_CRT));
             KeyStore keyStore = SecurityUtils.getDefaultKeyStore();
             try {
-            	keyStore.size();
+                keyStore.size();
             } catch (KeyStoreException e) {
-            	keyStore.load(null);
+                keyStore.load(null);
             }
             SecurityUtils.loadKeyStoreFromCertificates(keyStore, SecurityUtils.getX509CertificateFactory(), fis);
             transport = new NetHttpTransport.Builder().trustCertificates(keyStore).build();
         } catch (FileNotFoundException e) {
-        	runningInOpenShiftPodWithRequiredOAuthFeatures = false;
-        	if (LOGGER.isLoggable(Level.FINE) || withinAPod)
-        		LOGGER.log(Level.FINE, "populatateDefaults", e);
+            runningInOpenShiftPodWithRequiredOAuthFeatures = false;
+            if (LOGGER.isLoggable(Level.FINE) || withinAPod)
+                LOGGER.log(Level.FINE, "populatateDefaults", e);
         } finally {
-        	if (fis != null)
-        		fis.close();
-        	if (br != null)
-        		br.close();
+            if (fis != null)
+                fis.close();
+            if (br != null)
+                br.close();
         }
         
         final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod()).setAccessToken(getDefaultedClientSecret().getPlainText());
@@ -338,7 +337,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             OpenShiftUserInfo user = getOpenShiftUserInfo(credential, transport);
             String[] userNameParts = user.getName().split(":");
             if (userNameParts != null && userNameParts.length == 4) {
-            	defaultedServiceAccountName = userNameParts[3];
+                defaultedServiceAccountName = userNameParts[3];
             }
             runningInOpenShiftPodWithRequiredOAuthFeatures = runningInOpenShiftPodWithRequiredOAuthFeatures && (defaultedServiceAccountName != null ? defaultedServiceAccountName.length() > 0 : false);
             defaultedClientId = "system:serviceaccount:"+namespace+":"+getDefaultedServiceAccountName();
@@ -347,30 +346,30 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             if (withinAPod)
                 LOGGER.info(String.format("OpenShift OAuth: provider: %s", provider));
             if (provider != null) {
-            	// the issuer is the public address of the k8s svc; use this vs. the hostname or ip/port that is only available within the cluster
-            	this.defaultedRedirectURL = provider.issuer;
+                // the issuer is the public address of the k8s svc; use this vs. the hostname or ip/port that is only available within the cluster
+                this.defaultedRedirectURL = provider.issuer;
             } else {
                 runningInOpenShiftPodWithRequiredOAuthFeatures = false;
             }
         } catch (Throwable t) {
-        	runningInOpenShiftPodWithRequiredOAuthFeatures = false;
-        	if (LOGGER.isLoggable(Level.FINE))
-        		LOGGER.log(Level.FINE, "populateDefaults", t);
-        	else if (withinAPod)
-        	    LOGGER.log(Level.INFO, "populateDefaults", t);
+            runningInOpenShiftPodWithRequiredOAuthFeatures = false;
+            if (LOGGER.isLoggable(Level.FINE))
+                LOGGER.log(Level.FINE, "populateDefaults", t);
+            else if (withinAPod)
+                LOGGER.log(Level.INFO, "populateDefaults", t);
         }
         
         
         if (!runningInOpenShiftPodWithRequiredOAuthFeatures) {
-        	boolean hasSAName = this.serviceAccountName != null || this.defaultedServiceAccountName != null;
-        	boolean hasSecret = this.clientSecret != null || this.defaultedClientSecret != null;
-        	boolean hasClientID = this.clientId != null || this.defaultedClientId != null;
-        	boolean hasClientSecret = this.clientSecret != null || this.defaultedClientSecret != null;
-        	boolean hasRedirectURL = this.redirectURL != null || this.defaultedRedirectURL != null;
-        	// namespace check is really the validation that the service account directory is OK
-        	if (this.namespace != null && hasSAName && hasSecret &&  hasClientID && hasClientSecret && hasRedirectURL)
-        		runningInOpenShiftPodWithRequiredOAuthFeatures = true;
-        	
+            boolean hasSAName = this.serviceAccountName != null || this.defaultedServiceAccountName != null;
+            boolean hasSecret = this.clientSecret != null || this.defaultedClientSecret != null;
+            boolean hasClientID = this.clientId != null || this.defaultedClientId != null;
+            boolean hasClientSecret = this.clientSecret != null || this.defaultedClientSecret != null;
+            boolean hasRedirectURL = this.redirectURL != null || this.defaultedRedirectURL != null;
+            // namespace check is really the validation that the service account directory is OK
+            if (this.namespace != null && hasSAName && hasSecret &&  hasClientID && hasClientSecret && hasRedirectURL)
+                runningInOpenShiftPodWithRequiredOAuthFeatures = true;
+            
         }
         
         if (withinAPod)
@@ -378,7 +377,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                     this.namespace, this.serviceAccountDirectory, this.defaultedServiceAccountDirectory, this.serviceAccountName, this.defaultedServiceAccountName, this.clientId, this.defaultedClientId, 
                     this.clientSecret, this.defaultedClientSecret, this.redirectURL, this.defaultedRedirectURL, this.serverPrefix, this.defaultedServerPrefix));
         
-    	return runningInOpenShiftPodWithRequiredOAuthFeatures;        
+        return runningInOpenShiftPodWithRequiredOAuthFeatures;        
     }
     
     public String getServiceAccountDirectory() {
@@ -386,10 +385,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
         
     public String getDefaultedServiceAccountDirectory() {
-    	if (getServiceAccountDirectory() == null) {
-			return defaultedServiceAccountDirectory;
-    	}
-    	return getServiceAccountDirectory();
+        if (getServiceAccountDirectory() == null) {
+            return defaultedServiceAccountDirectory;
+        }
+        return getServiceAccountDirectory();
     }
 
     public String getServiceAccountName() {
@@ -397,10 +396,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
     
     public String getDefaultedServiceAccountName() {
-    	if (getServiceAccountName() == null) {
-    		return defaultedServiceAccountName;
-    	}
-    	return getServiceAccountName();
+        if (getServiceAccountName() == null) {
+            return defaultedServiceAccountName;
+        }
+        return getServiceAccountName();
     }
 
     public String getServerPrefix() {
@@ -408,19 +407,19 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
     
     public String getDefaultedServerPrefix() {
-    	if (getServerPrefix() == null)
-    		return defaultedServerPrefix;
-    	return getServerPrefix();
+        if (getServerPrefix() == null)
+            return defaultedServerPrefix;
+        return getServerPrefix();
     }
     
     public String getRedirectURL() {
-    	return redirectURL;
+        return redirectURL;
     }
     
     public String getDefaultedRedirectURL() {
-    	if (getRedirectURL() == null)
-    		return defaultedRedirectURL;
-    	return getRedirectURL();
+        if (getRedirectURL() == null)
+            return defaultedRedirectURL;
+        return getRedirectURL();
     }
     
     public String getClientId() {
@@ -428,10 +427,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
     
     public String getDefaultedClientId() {
-    	if (getClientId() == null) {
-    		return defaultedClientId;
-    	}
-    	return getClientId();
+        if (getClientId() == null) {
+            return defaultedClientId;
+        }
+        return getClientId();
     }
 
     public Secret getClientSecret() {
@@ -439,14 +438,14 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
     
     public Secret getDefaultedClientSecret() {
-    	if (getClientSecret() == null) {
-    		return Secret.fromString(defaultedClientSecret);
-    	}
-    	return getClientSecret();
+        if (getClientSecret() == null) {
+            return Secret.fromString(defaultedClientSecret);
+        }
+        return getClientSecret();
     }
     
     public String getDefaultedNamespace() {
-    	return namespace;
+        return namespace;
     }
     
     
@@ -463,23 +462,23 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         HttpRequestFactory requestFactory =
                 transport.createRequestFactory(new HttpRequestInitializer() {
                     public void initialize(HttpRequest request) throws IOException {
-                    	credential.initialize(request);
+                        credential.initialize(request);
                         request.setParser(new JsonObjectParser(JSON_FACTORY));
                     }
                 });
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + OAUTH_PROVIDER_URI);
         
-    	HttpRequest request = requestFactory.buildGetRequest(url);
+        HttpRequest request = requestFactory.buildGetRequest(url);
 
-    	OpenShiftProviderInfo info = request.execute().parseAs(OpenShiftProviderInfo.class);
-    	return info;
+        OpenShiftProviderInfo info = request.execute().parseAs(OpenShiftProviderInfo.class);
+        return info;
     }
     
     private OpenShiftUserInfo getOpenShiftUserInfo(final Credential credential, final HttpTransport transport) throws IOException {
         HttpRequestFactory requestFactory =
                 transport.createRequestFactory(new HttpRequestInitializer() {
                     public void initialize(HttpRequest request) throws IOException {
-                    	credential.initialize(request);
+                        credential.initialize(request);
                         request.setParser(new JsonObjectParser(JSON_FACTORY));
                     }
                 });
@@ -492,61 +491,61 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
     
     private String buildSARJson(String namespace, String verb) throws IOException {
-    	OpenShiftSubjectAccessReviewRequest request = new OpenShiftSubjectAccessReviewRequest();
-    	request.namespace = namespace;
-    	request.verb = verb;
-    	String json = JSON_FACTORY.toString(request);
-    	return json;
+        OpenShiftSubjectAccessReviewRequest request = new OpenShiftSubjectAccessReviewRequest();
+        request.namespace = namespace;
+        request.verb = verb;
+        String json = JSON_FACTORY.toString(request);
+        return json;
     }
     
     private HttpRequest buildPostSARRequest(HttpRequestFactory requestFactory, GenericUrl url, final String json) throws IOException {
         HttpContent contentAdmin = new HttpContent() {
 
-			@Override
-			public long getLength() throws IOException {
-				return (long)(json.getBytes().length);
-			}
+            @Override
+            public long getLength() throws IOException {
+                return (long)(json.getBytes().length);
+            }
 
-			@Override
-			public String getType() {
-				return "application/json";
-			}
+            @Override
+            public String getType() {
+                return "application/json";
+            }
 
-			@Override
-			public boolean retrySupported() {
-				return false;
-			}
+            @Override
+            public boolean retrySupported() {
+                return false;
+            }
 
-			@Override
-			public void writeTo(OutputStream out) throws IOException {
-				out.write(json.getBytes());
-				out.flush();
-			}
-        	
+            @Override
+            public void writeTo(OutputStream out) throws IOException {
+                out.write(json.getBytes());
+                out.flush();
+            }
+            
         };
         return requestFactory.buildPostRequest(url, contentAdmin);
     }
     
     private Set<String> postSAR(final Credential credential, final HttpTransport transport) throws IOException {
-    	HashSet<String> allowedVerbs = new HashSet<String>();
+        HashSet<String> allowedVerbs = new HashSet<String>();
         HttpRequestFactory requestFactory =
                 transport.createRequestFactory(new HttpRequestInitializer() {
                     public void initialize(HttpRequest request) throws IOException {
-                    	credential.initialize(request);
+                        credential.initialize(request);
                         request.setParser(new JsonObjectParser(JSON_FACTORY));
                     }
                 });
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + SAR_URI);
 
         for (String verb : ROLES) {
-        	String json = buildSARJson(namespace, verb);
+            String json = buildSARJson(namespace, verb);
             HttpRequest request = this.buildPostSARRequest(requestFactory, url, json);
             OpenShiftSubjectAccessReviewResponse review = request.execute().parseAs(OpenShiftSubjectAccessReviewResponse.class);
             if (review != null) {
-            	if (LOGGER.isLoggable(Level.FINE))
-            		LOGGER.fine(String.format("postSAR: response for verb %s hydrated into obj: namespace %s allowed %s reason %s", verb, review.namespace, Boolean.toString(review.allowed), review.reason));
-            	if (review.allowed)
-            		allowedVerbs.add(verb);
+                if (LOGGER.isLoggable(Level.FINE))
+                    LOGGER.fine(String.format("postSAR: response for verb %s hydrated into obj: namespace %s allowed %s reason %s", verb, review.namespace, Boolean.toString(review.allowed), review.reason));
+                if (review.allowed)
+                    allowedVerbs.add(verb);
             }
         }
         return allowedVerbs;
@@ -572,14 +571,14 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         );
     }
 
-    protected OAuthSession newOAuthSession(String from, final String redirectOnFinish) {
+    protected OAuthSession newOAuthSession(String from, final String redirectOnFinish) throws MalformedURLException {
         // shout out to Cesar, while the auth server URL needs to be publicly accessible such that the browser
         // can reference it, the token server URL does not;  see https://docs.oracle.com/cd/E50612_01/doc.11122/oauth_guide/content/oauth_flows.html
         // for a good description of the flow;  as such, while the OAUTH_PROVIDER_URI endpoint returns a publicly accessible token server url, we 
         // can't assume that is accessible from the jenkins pod (think running in a publicly accessible ec2 instance where the public facing address
         // of the master is not accessible from within the cluster); so we only use the configured server prefix, where if not explicitly configured
         // we go with the internally accessible default
-    	final GenericUrl tokenServerURL = new GenericUrl(getDefaultedServerPrefix() + "/oauth/token");
+        final GenericUrl tokenServerURL = new GenericUrl(getDefaultedServerPrefix() + "/oauth/token");
         final String authorizationServerURL = getDefaultedRedirectURL() +"/oauth/authorize";
         
         final AuthorizationCodeFlow flow = new AuthorizationCodeFlow.Builder(
@@ -589,22 +588,23 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                 .build();
         
         final OpenShiftOAuth2SecurityRealm secRealm = this;
+        final String url = buildOAuthRedirectUrl(redirectOnFinish);
         
-        return new OAuthSession(flow, from, buildOAuthRedirectUrl(redirectOnFinish)) {
+        return new OAuthSession(flow, from, url) {
             @Override
             public HttpResponse onSuccess(String authorizationCode) {
                 try {
                     IdTokenResponse response = IdTokenResponse.execute(
-                            flow.newTokenRequest(authorizationCode).setRedirectUri(buildOAuthRedirectUrl(redirectOnFinish)));
+                            flow.newTokenRequest(authorizationCode).setRedirectUri(url));
                     final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod()).setFromTokenResponse(response);
-                	this.setCredential(credential);
+                    this.setCredential(credential);
                     secRealm.updateAuthorizationStrategy(credential);
-                            			
+                                        
                     return new HttpRedirect(redirectOnFinish);
 
                 } catch (Throwable e) {
-                	if (LOGGER.isLoggable(Level.FINE))
-                		LOGGER.log(Level.FINE, "onSuccess", e);
+                    if (LOGGER.isLoggable(Level.FINE))
+                        LOGGER.log(Level.FINE, "onSuccess", e);
                     return HttpResponses.error(500,e);
                 }
             }
@@ -613,7 +613,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
     
     public UsernamePasswordAuthenticationToken updateAuthorizationStrategy(Credential credential) throws IOException, GeneralSecurityException {
-    	populateDefaults();
+        populateDefaults();
         OpenShiftUserInfo info = getOpenShiftUserInfo(credential, transport);
         Set<String> allowedRoles = postSAR(credential, transport);
         GrantedAuthority[] authorities = new GrantedAuthority[] {SecurityRealm.AUTHENTICATED_AUTHORITY};
@@ -746,19 +746,29 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
      * The login process starts from here.
      */
     public HttpResponse doCommenceLogin(@QueryParameter String from,  @Header("Referer") final String referer) throws IOException {
-    	if (LOGGER.isLoggable(Level.FINE))
-    		LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), START_METHOD, new Object[] {from, referer});
-    	
-    	// refresh defaults just in case the jenkins pod was recycled, etc.
-    	try {
-			populateDefaults();
-		} catch (GeneralSecurityException e) {
-			throw new RuntimeException(e);
-		}
+        if (LOGGER.isLoggable(Level.FINE))
+            LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), START_METHOD, new Object[] {from, referer});
+        
+        // refresh defaults just in case the jenkins pod was recycled, etc.
+        try {
+            populateDefaults();
+        } catch (GeneralSecurityException e) {
+            throw new RuntimeException(e);
+        }
         final String redirectOnFinish;
-        if (from != null) {
+        URL fromURL = null;
+        URL refererURL = null;
+        try {
+            fromURL = new URL(from);
+        } catch (MalformedURLException e) {            
+        }
+        try {
+            refererURL = new URL(referer);
+        } catch (MalformedURLException e) {            
+        }
+        if (fromURL != null) {
             redirectOnFinish = from;
-        } else if (referer != null) {
+        } else if (refererURL != null) {
             redirectOnFinish = referer;
         } else {
             redirectOnFinish = Jenkins.getInstance().getRootUrl();
@@ -767,61 +777,67 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         return newOAuthSession(from, redirectOnFinish).doCommenceLogin();
     }
 
-    private String buildOAuthRedirectUrl(String redirect) {
-    	if (redirectUrl != null)
-    		return redirectUrl;
-    	if (redirect != null && redirect.startsWith("https://"))
-    		return redirect;
-        String rootUrl = Jenkins.getInstance().getRootUrl();
-        if (rootUrl == null)
-            throw new NullPointerException("Jenkins root url should not be null");
-        return rootUrl + "securityRealm/finishLogin";
+    private String buildOAuthRedirectUrl(String redirect) throws MalformedURLException {
+        if (redirectUrl != null)
+            return redirectUrl;
+        URL url = null;
+        try {
+            url = new URL(redirect);
+            // just in case, strip redirect to a "root" url before appending the finishLogin path
+            // also validate the protocol as a sanity check
+            if (url != null && (url.getProtocol().equalsIgnoreCase("http") || url.getProtocol().equalsIgnoreCase("https"))) {
+                return url.getProtocol() + "://" +url.getHost() + "/securityRealm/finishLogin";
+            }
+        } catch (MalformedURLException e) {       
+            throw e;
+        }
+        throw new MalformedURLException("redirect url " + redirect + " insufficient");
     }
 
     /**
      * This is where the user comes back to at the end of the OpenID redirect ping-pong.
      */
     public HttpResponse doFinishLogin(StaplerRequest request) throws IOException {
-    	if (LOGGER.isLoggable(Level.FINE)) {
-    		if (request != null)
-    			LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), FINISH_METHOD, new Object[]{request.getQueryString(), request.getRequestURL()});
-    		else
-    			LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), FINISH_METHOD);
-    	}
-    	if (OAuthSession.getCurrent() != null) {
-    		return OAuthSession.getCurrent().doFinishLogin(request);
-    	} else {
-    		// if oauth session null, then came in with stale http session and/or "securityRealm/finishLogin" on the browser's redirect url, 
-    		// so redirect to root url and have them re-login, like standard jenkins auth
-    		return new HttpRedirect(Jenkins.getInstance().getRootUrl());
-    	}
+        if (LOGGER.isLoggable(Level.FINE)) {
+            if (request != null)
+                LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), FINISH_METHOD, new Object[]{request.getQueryString(), request.getRequestURL()});
+            else
+                LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), FINISH_METHOD);
+        }
+        if (OAuthSession.getCurrent() != null) {
+            return OAuthSession.getCurrent().doFinishLogin(request);
+        } else {
+            // if oauth session null, then came in with stale http session and/or "securityRealm/finishLogin" on the browser's redirect url, 
+            // so redirect to root url and have them re-login, like standard jenkins auth
+            return new HttpRedirect(Jenkins.getInstance().getRootUrl());
+        }
     }
 
     
     
     @Override
-	protected String getPostLogOutUrl(StaplerRequest req, Authentication auth) {
+    protected String getPostLogOutUrl(StaplerRequest req, Authentication auth) {
         if (req.getRequestURL().toString().contains(LOGOUT))
             req.getSession().setAttribute(LOGGING_OUT, LOGGING_OUT);
-    	// there was a scenario when a user a) logged out of jenkins, and b) jenkins was restarted,
-    	// where the various redirection query parameters on the logout url would result in a login
-    	// going directly to the doFinishLogin path with no http session / oauth session available;
-    	// forcing the user back down the doCommenceLogin path did not work for various reasons, and
-    	// the solution above (to redirect to jenkins root) meant the user had to submit the login 
-    	// request twice to get authenticated and logged in.
-    	//
-    	// By updating the post log out url here with this Jenkins plugin point (where we strip out the /logout suffix Jenkins applies
-    	// and return the last success url the user accessed Jenkins with, we avoid the need for the 
-    	// 2 login attempts after logout when jenkins is recycled in the interim.
-    	return req.getRequestURL().toString().replace(LOGOUT, "");
-	}
+        // there was a scenario when a user a) logged out of jenkins, and b) jenkins was restarted,
+        // where the various redirection query parameters on the logout url would result in a login
+        // going directly to the doFinishLogin path with no http session / oauth session available;
+        // forcing the user back down the doCommenceLogin path did not work for various reasons, and
+        // the solution above (to redirect to jenkins root) meant the user had to submit the login 
+        // request twice to get authenticated and logged in.
+        //
+        // By updating the post log out url here with this Jenkins plugin point (where we strip out the /logout suffix Jenkins applies
+        // and return the last success url the user accessed Jenkins with, we avoid the need for the 
+        // 2 login attempts after logout when jenkins is recycled in the interim.
+        return req.getRequestURL().toString().replace(LOGOUT, "");
+    }
 
 
 
-	@Extension
+    @Extension
     public static final class DescriptorImpl extends Descriptor<SecurityRealm> {
 
-		public String getDisplayName() {
+        public String getDisplayName() {
             return DISPLAY_NAME;
         }
 
@@ -832,33 +848,33 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         }
         
         public FormValidation doCheckServiceAccountDirectory(@QueryParameter String value) 
-        		throws IOException, ServletException {
-        	return paramsWithPodDefaults(value);
+                throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
         }
         
         public FormValidation doCheckClientId(@QueryParameter String value) 
-        		throws IOException, ServletException {
-        	return paramsWithPodDefaults(value);
+                throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
         }
         
         public FormValidation doCheckClientSecret(@QueryParameter String value) 
-        		throws IOException, ServletException {
-        	return paramsWithPodDefaults(value);
+                throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
         }
                
         public FormValidation doCheckServerPrefix(@QueryParameter String value) 
-        		throws IOException, ServletException {
-        	return paramsWithPodDefaults(value);
+                throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
         }
         
         public FormValidation doCheckRedirectURL(@QueryParameter String value) 
-        		throws IOException, ServletException {
-        	return paramsWithPodDefaults(value);
+                throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
         }
         
         public FormValidation doCheckServiceAccountName(@QueryParameter String value) 
-        		throws IOException, ServletException {
-        	return paramsWithPodDefaults(value);
+                throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
         }
 
     }
