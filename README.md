@@ -1,20 +1,84 @@
 openshift-login
 ===============
 
-A Jenkins plugin which lets you login to Jenkins with your account on your OpenShift installation. Focuses on enabling SSO for Jenkins within your cluster.
+A Jenkins plugin which lets you login to Jenkins with your account on an OpenShift installation.
 
 
-The primary scenario is using this plugin when Jenkins is running in a OpenShift pod, and the jobs with Jenkins operate against the
-same OpenShift cluster that Jenkins is running in.  In this scenario, no additional configuration is required, but you must be running agaist v1.4 of OpenShift/Origin (https://github.com/openshift/origin/tree/release-1.4).
+Primary scenario
+--------------------------------
 
-Otherwise, for development purposes, or for scenarios where the OpenShift pod defaults do not apply, the configuration parameters are:
+This plugin can function with no additional configuration within Jenkins, but you must be running in an OpenShift Pod and against v1.4+ of OpenShift/Origin (https://github.com/openshift/origin/tree/release-1.4).
 
-* service account directory:  The directory to load service account information from. Three files are referenced:  'namespace', 'ca.crt', and 'token'. They correspond to the OpenShift project, certificate, and authentication token for the service account.
-* service account name:  override for the service account name used when authenticating users against OAuth (default derived from token / client secret)
-* server prefix:  URI for the OpenShift OAuth endpoint
-* redirect URL: URL for the OpenShift API server
-* client ID:  override for the ID for the OpenShift OAuth client (default derived from service account information)
-* client secret:  override for the service account token (to change permissions for the OAuth client during the OAuth authentication flows)
+When running against a sufficient level of OpenShift/origin, and the plugin is installed in your Jenkins instance, the authentication mechanism (the "Security Realm") established within your Jenkins instance is as follows:
+
+* If running outside of an OpenShift Pod, then on start up the authentication mechanism configured for Jenkins is used.  
+* If running inside of an OpenShift Pod and the environment variable `OPENSHIFT_ENABLE_OAUTH` set to `false` on the container, then on start up the authentication mechanism configured for Jenkins is used. 
+* Otherwise, if running in an OpenShift Pod and the environment variable `OPENSHIFT_ENABLE_OAUTH` is set to a value other than `false` on the container, the plugin
+auto-enables itself to manage the login process, and to login you specify valid credentials as required by the identity provider used by OpenShift.  
+
+NOTE:  When this plugin manages authentication, the predefined `admin` user in the default Jenkins user database for the [OpenShift Jenkins image](https://github.com/openshift/jenkins) is now ignored.
+Unless there is an `admin` user defined within OpenShift with sufficient permissions to the project Jenkins is running in, you will not be able to do anything with Jenkins by logging in as `admin`.
+
+Running in an OpenShift Pod against v1.4 or later of OpenShift/Origin with `OPENSHIFT_ENABLED_OAUTH=true` is hence the primary scenario for this plugin.
+
+A quick reminder on OpenShift identity providers: if, for example, the default OpenShift identity provider `Allow All` is used, you can provide any non-empty
+string as the password for any valid user for the OpenShift project Jenkins is running in.  Otherwise, if `Allow All` is not used as the identity provider, then valid credentials stored with your identity provider must be provided.
+
+For non-browser, direct HTTP or HTTPS access to Jenkins when the plugin manages authentication, a HTTP bearer token authentication header must be supplied
+with an OpenShift token which has sufficient permissions to access the project that Jenkins is running in. A suggested token to use is a token associated with the service account for the project Jenkins in running in.  If you started
+Jenkins using the example [jenkins-ephemeral](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-ephemeral-template.json) or [jenkins-persistent](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-persistent-template.json) templates, the commands to display the token are:
+
+    ```
+    $ oc describe serviceaccount jenkins
+    $ oc describe secret <serviceaccount secret name>
+    ``` 
+
+Once authenticated, OpenShift roles determine which Jenkins permissions you have.  Any user with the OpenShift `admin` role for the OpenShift project Jenkins is running in will have the same permissions as those assigned to an administrative user within Jenkins.
+Users with the `edit` or `view` roles for the OpenShift project Jenkins is running in will have progressively reduced permissions within Jenkins.
+
+For the `view` role, the Jenkins permissions are:
+
+* hudson.model.Hudson.READ
+* hudson.model.Item.READ
+* com.cloudbees.plugins.credentials.CredentialsProvider.VIEW
+
+For the `edit` role, in addition to the permissions available to `view`:
+
+* hudson.model.Item.BUILD
+* hudson.model.Item.CONFIGURE
+* hudson.model.Item.CREATE
+* hudson.model.Item.DELETE
+* hudson.model.Item.WORKSPACE
+* hudson.scm.SCM.TAG
+* jenkins.model.Jenkins.RUN_SCRIPTS
+
+Users authenticated against OpenShift OAuth will be added to the Jenkins authorization matrix upon their first successful login.
+
+Permissions for users in Jenkins can be changed in OpenShift after those users are initially established in Jenkins.  The OpenShift Login plugin polls the OpenShift API server for permissions and will update the permissions stored in
+Jenkins for each Jenkins user with the permissions retrieved from OpenShift.  Technically speaking, you can change the permissions for a Jenkins user from the Jenkins UI as well, but those changes will be overwritten the next
+time the poll occurs.
+
+You can control how often the polling occurs with the `OPENSHIFT_PERMISSIONS_POLL_INTERVAL` environment variable.  The default polling interval when no environment variable is set is 5 minutes.
+
+Secondary scenarios
+-------------------------------
+
+This plugin can be explicitly configured from within the Jenkins console to manage the login/authentication process for Jenkins.  Examples for wanting to do this might be for development of this plugin, or perhaps for running within a pre-existing
+Jenkins installation that runs outside of an OpenShift Pod.
+
+Even though Jenkins is not running in OpenShift, you should define a project in the same fashion as the [jenkins-ephemeral](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-ephemeral-template.json) or [jenkins-persistent](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-persistent-template.json) templates do, including defining a service account.  Permissions and authorization levels for users within that project then dictate the level of authorization the users have with Jenkins.  And the service acccount participates both in the authentication flows for the user logging in, as well as performs the OAuth self-SAR to determine authorization levels.
+
+Once this project and related settings are defined in OpenShift, you can then go to the Jenkins console to enable the plugin as the "Security Realm".  Once logged into Jenkins, go to "Manage Jenknins", then "Configure Global Security", and then select
+"Login with OpenShift" as the security realm.  Some details on the various configuration fields (where only the first three are required): 
+
+* service account directory:  The directory to load service account information from. Three files are referenced:  'namespace', 'ca.crt', and 'token'. They correspond to the OpenShift project, certificate, and authentication token for the service account of the project used to manage the authorization levels of the users of Jenkins.  You must populate those files with the correct information.
+* service account name:  The service account used when authenticating users against the OAuth server running in OpenShift.
+* server prefix:  URI for the OpenShift OAuth endpoint (i.e. the OpenShift master endpoint)
+* redirect URL (optional): URL for the OpenShift API server that Jenkins redirects to when starting the authentication process; the plugin by default pull this information from the payload retrieved from the OpenShift endpoint https://<server prefix>/.well-known/oauth-authorization-server
+* client ID (optional):  override for the ID for the OpenShift OAuth client; default derived by namespace and service account names, and takes the form ""system:serviceaccount:<namespace>:<serviceaccountname>"; allows one to change the service account name the OAuth client during the OAuth authentication flows if the service account 
+directory is shared across multiple Jenkins installations
+* client secret (optional):  override for the service account token (the 'token' file under the service account directory); allows one to change permissions for the OAuth client during the OAuth authentication flows if the service account 
+directory is shared across multiple Jenkins installations
 
 NOTE:  On the OAuth redirect flow during login from a browser, the construction of the redirect URL back to Jenkins when
 authentication is successful examines the following elements in this order:
