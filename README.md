@@ -83,7 +83,7 @@ time the poll occurs.
 You can control how often the polling occurs with the `OPENSHIFT_PERMISSIONS_POLL_INTERVAL` environment variable.  The default polling interval when no environment variable is set is 5 minutes.
 
 
-##Secondary scenarios
+## Secondary scenarios
 
 This plugin can be explicitly configured from within the Jenkins console to manage the login/authentication process for Jenkins.  Examples for wanting to do this might be for development of this plugin, or perhaps for running within a pre-existing
 Jenkins installation that runs outside of an OpenShift Pod.
