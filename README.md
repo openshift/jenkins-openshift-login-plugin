@@ -1,11 +1,10 @@
-openshift-login
-===============
+#openshift-login
+
 
 A Jenkins plugin which lets you login to Jenkins with your account on an OpenShift installation.
 
 
-Primary scenario
---------------------------------
+##Primary scenario
 
 This plugin can function with no additional configuration within Jenkins, but you must be running in an OpenShift Pod and against v1.4+ of OpenShift/Origin (https://github.com/openshift/origin/tree/release-1.4).
 
@@ -24,14 +23,37 @@ Running in an OpenShift Pod against v1.4 or later of OpenShift/Origin with `OPEN
 A quick reminder on OpenShift identity providers: if, for example, the default OpenShift identity provider `Allow All` is used, you can provide any non-empty
 string as the password for any valid user for the OpenShift project Jenkins is running in.  Otherwise, if `Allow All` is not used as the identity provider, then valid credentials stored with your identity provider must be provided.
 
-For non-browser, direct HTTP or HTTPS access to Jenkins when the plugin manages authentication, a HTTP bearer token authentication header must be supplied
-with an OpenShift token which has sufficient permissions to access the project that Jenkins is running in. A suggested token to use is a token associated with the service account for the project Jenkins in running in.  If you started
+### Browser access
+
+When attempting to log into the Jenkins console when this plugin controls Jenkins authentication, you'll first see a prompt 
+with both Jenkins and OpenShift icons, explaining that you can proceed to log into Jenkins with your OpenShift credentials.
+You will then be redirected to an OpenShift login page, where you provide those credentials.  Once the credentials as provided,
+you will then be asked about allowing the associated service account the ability to check access for you.  If you allow
+this, the authentication process will occur within the OpenShift master, and if successful, you will be logged into Jenkins
+and redirected to the URL you originally supplied in the browser..
+
+#### Specifics on the redirect flow during browser login
+
+On the OAuth redirect flow during login from a browser, the construction of the redirect URL back to Jenkins when
+authentication is successful examines the following elements in this order:
+
+* first the `from` query parameter of the initial login URL is examined to see if it is a valid URL
+* second the `referer` header of the initial login URL is examined to see if it is a valid URL
+* lastly, the root URL for the Jenkins instance is used; if you have explicitly configured a root URL for your Jenkins
+server, then you must ensure that URL has been added to the OAuth list of allowed redirect URLs on the service account
+used for authenticating users 
+
+### Non-browser access
+
+For non-browser, direct HTTP or HTTPS access to Jenkins when the plugin manages authentication, a HTTP bearer token authentication header must be supplied with an OpenShift token which has sufficient permissions to access the project that Jenkins is running in. A suggested token to use is a token associated with the service account for the project Jenkins in running in.  If you started
 Jenkins using the example [jenkins-ephemeral](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-ephemeral-template.json) or [jenkins-persistent](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-persistent-template.json) templates, the commands to display the token are:
 
     ```
     $ oc describe serviceaccount jenkins
     $ oc describe secret <serviceaccount secret name>
     ``` 
+    
+### OpenShift role to Jenkins permission mapping    
 
 Once authenticated, OpenShift roles determine which Jenkins permissions you have.  Any user with the OpenShift `admin` role for the OpenShift project Jenkins is running in will have the same permissions as those assigned to an administrative user within Jenkins.
 Users with the `edit` or `view` roles for the OpenShift project Jenkins is running in will have progressively reduced permissions within Jenkins.
@@ -60,8 +82,8 @@ time the poll occurs.
 
 You can control how often the polling occurs with the `OPENSHIFT_PERMISSIONS_POLL_INTERVAL` environment variable.  The default polling interval when no environment variable is set is 5 minutes.
 
-Secondary scenarios
--------------------------------
+
+##Secondary scenarios
 
 This plugin can be explicitly configured from within the Jenkins console to manage the login/authentication process for Jenkins.  Examples for wanting to do this might be for development of this plugin, or perhaps for running within a pre-existing
 Jenkins installation that runs outside of an OpenShift Pod.
@@ -80,11 +102,3 @@ directory is shared across multiple Jenkins installations
 * client secret (optional):  override for the service account token (the 'token' file under the service account directory); allows one to change permissions for the OAuth client during the OAuth authentication flows if the service account 
 directory is shared across multiple Jenkins installations
 
-NOTE:  On the OAuth redirect flow during login from a browser, the construction of the redirect URL back to Jenkins when
-authentication is successful examines the following elements in this order:
-
-* first the `from` query parameter of the initial login URL is examined to see if it is a valid URL
-* second the `referer` header of the initial login URL is examined to see if it is a valid URL
-* lastly, the root URL for the Jenkins instance is used; if you have explicitly configured a root URL for your Jenkins
-server, then you must ensure that URL has been added to the OAuth list of allowed redirect URLs on the service account
-used for authenticating users 
