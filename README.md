@@ -1,10 +1,10 @@
-#openshift-login
+# openshift-login
 
 
 A Jenkins plugin which lets you login to Jenkins with your account on an OpenShift installation.
 
 
-##Primary scenario
+## Primary scenario
 
 This plugin can function with no additional configuration within Jenkins, but you must be running in an OpenShift Pod and against v1.4+ of OpenShift/Origin (https://github.com/openshift/origin/tree/release-1.4).
 
