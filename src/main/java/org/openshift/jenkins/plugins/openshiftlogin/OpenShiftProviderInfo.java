@@ -32,46 +32,32 @@ import com.google.api.client.util.Key;
  * This is from https://SERVER/.well-known/oauth-authorization-server
  */
 /*
-{
-  "issuer": "https://10.13.137.132:8443",
-  "authorization_endpoint": "https://10.13.137.132:8443/oauth/authorize",
-  "token_endpoint": "https://10.13.137.132:8443/oauth/token",
-  "scopes_supported": [
-    "user:full",
-    "user:info",
-    "user:check-access",
-    "user:list-scoped-projects",
-    "user:list-projects"
-  ],
-  "response_types_supported": [
-    "code",
-    "token"
-  ],
-  "grant_types_supported": [
-    "authorization_code"
-  ]
-}
+ * { "issuer": "https://10.13.137.132:8443", "authorization_endpoint":
+ * "https://10.13.137.132:8443/oauth/authorize", "token_endpoint":
+ * "https://10.13.137.132:8443/oauth/token", "scopes_supported": [ "user:full",
+ * "user:info", "user:check-access", "user:list-scoped-projects",
+ * "user:list-projects" ], "response_types_supported": [ "code", "token" ],
+ * "grant_types_supported": [ "authorization_code" ] }
  */
 public class OpenShiftProviderInfo {
-	
-	public OpenShiftProviderInfo() {
-		
-	}
 
-	@Key
-	public String issuer;
-	
-	@Key
-	public String authorization_endpoint;
-	
-	@Key
-	public String token_endpoint;
+    public OpenShiftProviderInfo() {
+
+    }
+
+    @Key
+    public String issuer;
+
+    @Key
+    public String authorization_endpoint;
+
+    @Key
+    public String token_endpoint;
 
     @Override
     public String toString() {
-        return "OpenShiftProviderInfo: issuer: " + issuer + " auth ep: " + authorization_endpoint + " token ep: " + token_endpoint;
+        return "OpenShiftProviderInfo: issuer: " + issuer + " auth ep: "
+                + authorization_endpoint + " token ep: " + token_endpoint;
     }
-	
-	
-	
+
 }

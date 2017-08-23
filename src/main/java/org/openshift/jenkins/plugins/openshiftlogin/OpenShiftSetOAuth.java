@@ -45,7 +45,7 @@ public class OpenShiftSetOAuth {
     static boolean setOauth() {
         return setOauth(true);
     }
-    
+
     static boolean setOauth(boolean force) {
         final Jenkins jenkins = Jenkins.getInstance();
         String enabled = EnvVars.masterEnvVars.get(OPENSHIFT_ENABLE_OAUTH);
@@ -60,10 +60,15 @@ public class OpenShiftSetOAuth {
             // configured, so leave alone
             if (!(priorSecurityRealm instanceof OpenShiftOAuth2SecurityRealm)) {
                 synchronized (OpenShiftSetOAuth.class) {
-                    if (force || (System.currentTimeMillis() > lastCheck + 1000)) {
-                        LOGGER.info("OpenShift OAuth: enable oauth set to " + enabled + " force " + force + " lastCheck " + new Date(lastCheck));
+                    if (force
+                            || (System.currentTimeMillis() > lastCheck + 1000)) {
+                        LOGGER.info("OpenShift OAuth: enable oauth set to "
+                                + enabled + " force " + force + " lastCheck "
+                                + new Date(lastCheck));
                         LOGGER.info("OpenShift OAuth: configured security realm on startup: "
-                                + priorSecurityRealm + " last check " + new Date(lastCheck));
+                                + priorSecurityRealm
+                                + " last check "
+                                + new Date(lastCheck));
                         lastCheck = System.currentTimeMillis();
                         try {
                             final OpenShiftOAuth2SecurityRealm osrealm = new OpenShiftOAuth2SecurityRealm(

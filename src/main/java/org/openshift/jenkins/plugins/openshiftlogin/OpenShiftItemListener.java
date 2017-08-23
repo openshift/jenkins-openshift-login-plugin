@@ -33,13 +33,14 @@ import hudson.model.listeners.ItemListener;
 
 @Extension
 public class OpenShiftItemListener extends ItemListener {
-	
-    static final Logger LOGGER = Logger.getLogger(OpenShiftItemListener.class.getName());	
 
-	@Override
-	public void onLoaded() {
-	    OpenShiftSetOAuth.setOauth();
-	}
+    static final Logger LOGGER = Logger.getLogger(OpenShiftItemListener.class
+            .getName());
+
+    @Override
+    public void onLoaded() {
+        OpenShiftSetOAuth.setOauth();
+    }
 
     @Override
     public void onCreated(Item item) {

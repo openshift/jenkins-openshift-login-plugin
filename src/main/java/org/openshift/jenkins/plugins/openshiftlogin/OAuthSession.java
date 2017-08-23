@@ -22,7 +22,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
- package org.openshift.jenkins.plugins.openshiftlogin;
+package org.openshift.jenkins.plugins.openshiftlogin;
 
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.AuthorizationCodeRequestUrl;
@@ -47,9 +47,10 @@ import java.util.UUID;
  * Verifies the validity of the response by comparing the state.
  */
 public abstract class OAuthSession {
-	private static final String OPENSHIFT_ENABLE_REDIRECT_PROMPT = "OPENSHIFT_ENABLE_REDIRECT_PROMPT";
+    private static final String OPENSHIFT_ENABLE_REDIRECT_PROMPT = "OPENSHIFT_ENABLE_REDIRECT_PROMPT";
     private final AuthorizationCodeFlow flow;
-    private final String uuid = Base64.encode(UUID.randomUUID().toString().getBytes()).substring(0,20);
+    private final String uuid = Base64.encode(
+            UUID.randomUUID().toString().getBytes()).substring(0, 20);
     /**
      * The url the user was trying to navigate to.
      */
@@ -59,16 +60,19 @@ public abstract class OAuthSession {
      * Where Google will redirect to once the scopes are approved by the user.
      */
     private final String redirectUrl;
-    
+
     private Credential credential;
+
     public Credential getCredential() {
-    	return credential;
-    }
-    public void setCredential(Credential cred) {
-    	credential = cred;
+        return credential;
     }
 
-    public OAuthSession(AuthorizationCodeFlow flow, String from, String redirectUrl) {
+    public void setCredential(Credential cred) {
+        credential = cred;
+    }
+
+    public OAuthSession(AuthorizationCodeFlow flow, String from,
+            String redirectUrl) {
         this.flow = flow;
         this.from = from;
         this.redirectUrl = redirectUrl;
@@ -79,31 +83,40 @@ public abstract class OAuthSession {
      */
     public HttpResponse doCommenceLogin() throws IOException {
         // remember this in the session
-        Stapler.getCurrentRequest().getSession().setAttribute(SESSION_NAME, this);
+        Stapler.getCurrentRequest().getSession()
+                .setAttribute(SESSION_NAME, this);
 
         return doRequestAuthorizationCode();
     }
-    
+
     protected HttpResponse doRequestAuthorizationCode() {
-        AuthorizationCodeRequestUrl authorizationCodeRequestUrl = flow.newAuthorizationUrl().setState(uuid).setRedirectUri(redirectUrl);
-        String redirect = EnvVars.masterEnvVars.get(OPENSHIFT_ENABLE_REDIRECT_PROMPT);
+        AuthorizationCodeRequestUrl authorizationCodeRequestUrl = flow
+                .newAuthorizationUrl().setState(uuid)
+                .setRedirectUri(redirectUrl);
+        String redirect = EnvVars.masterEnvVars
+                .get(OPENSHIFT_ENABLE_REDIRECT_PROMPT);
         if (redirect != null && !redirect.equalsIgnoreCase("false"))
-        	return new OpenShiftHttpRedirectWithPrompt(authorizationCodeRequestUrl.toString());
+            return new OpenShiftHttpRedirectWithPrompt(
+                    authorizationCodeRequestUrl.toString());
         else
-        	return new HttpRedirect(authorizationCodeRequestUrl.toString());    	
+            return new HttpRedirect(authorizationCodeRequestUrl.toString());
     }
 
     /**
-     * When the identity provider is done with its thing, the user comes back here.
+     * When the identity provider is done with its thing, the user comes back
+     * here.
      */
-    public HttpResponse doFinishLogin(StaplerRequest request) throws IOException {
+    public HttpResponse doFinishLogin(StaplerRequest request)
+            throws IOException {
         StringBuffer buf = request.getRequestURL();
         if (request.getQueryString() != null) {
             buf.append('?').append(request.getQueryString());
         }
-        AuthorizationCodeResponseUrl responseUrl = new AuthorizationCodeResponseUrl(buf.toString());
-        if (! uuid.equals(responseUrl.getState())) {
-            return HttpResponses.error(401, "State is invalid; uuid == " + uuid + " resp state == " + responseUrl.getState());
+        AuthorizationCodeResponseUrl responseUrl = new AuthorizationCodeResponseUrl(
+                buf.toString());
+        if (!uuid.equals(responseUrl.getState())) {
+            return HttpResponses.error(401, "State is invalid; uuid == " + uuid
+                    + " resp state == " + responseUrl.getState());
         }
         String code = responseUrl.getCode();
         if (responseUrl.getError() != null) {
@@ -124,13 +137,16 @@ public abstract class OAuthSession {
         return from;
     }
 
-    protected abstract HttpResponse onSuccess(String authorizationCode) throws IOException;
+    protected abstract HttpResponse onSuccess(String authorizationCode)
+            throws IOException;
 
     /**
-     * Gets the {@link OAuthSession} associated with HTTP session in the current extend.
+     * Gets the {@link OAuthSession} associated with HTTP session in the current
+     * extend.
      */
     public static OAuthSession getCurrent() {
-        return (OAuthSession) Stapler.getCurrentRequest().getSession().getAttribute(SESSION_NAME);
+        return (OAuthSession) Stapler.getCurrentRequest().getSession()
+                .getAttribute(SESSION_NAME);
     }
 
     static final String SESSION_NAME = OAuthSession.class.getName();
