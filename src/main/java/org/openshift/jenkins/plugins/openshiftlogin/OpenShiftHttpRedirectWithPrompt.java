@@ -21,23 +21,23 @@ import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 
 public class OpenShiftHttpRedirectWithPrompt extends RuntimeException implements
-		HttpResponse {
+        HttpResponse {
 
-	private final int statusCode;
-	private final String url;
-	private ArrayList<String> redirect;
+    private final int statusCode;
+    private final String url;
+    private ArrayList<String> redirect;
 
-	public OpenShiftHttpRedirectWithPrompt(@Nonnull String url) {
-		this(SC_MOVED_TEMPORARILY, url);
-	}
+    public OpenShiftHttpRedirectWithPrompt(@Nonnull String url) {
+        this(SC_MOVED_TEMPORARILY, url);
+    }
 
-	public OpenShiftHttpRedirectWithPrompt(int statusCode, @Nonnull String url) {
-		this.statusCode = statusCode;
-		if (url == null) {
-			throw new NullPointerException();
-		}
-		this.url = url;
-		this.redirect = new ArrayList<String>();
+    public OpenShiftHttpRedirectWithPrompt(int statusCode, @Nonnull String url) {
+        this.statusCode = statusCode;
+        if (url == null) {
+            throw new NullPointerException();
+        }
+        this.url = url;
+        this.redirect = new ArrayList<String>();
         InputStream is = null;
         InputStreamReader isr = null;
         BufferedReader br = null;
@@ -58,59 +58,67 @@ public class OpenShiftHttpRedirectWithPrompt extends RuntimeException implements
                 try {
                     is.close();
                 } catch (IOException e) {
-                    if (OpenShiftOAuth2SecurityRealm.LOGGER.isLoggable(Level.FINE))
-                        OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.FINE, "ctor", e);
+                    if (OpenShiftOAuth2SecurityRealm.LOGGER
+                            .isLoggable(Level.FINE))
+                        OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.FINE,
+                                "ctor", e);
                 }
             if (isr != null)
                 try {
                     isr.close();
                 } catch (IOException e) {
-                    if (OpenShiftOAuth2SecurityRealm.LOGGER.isLoggable(Level.FINE))
-                        OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.FINE, "ctor", e);
+                    if (OpenShiftOAuth2SecurityRealm.LOGGER
+                            .isLoggable(Level.FINE))
+                        OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.FINE,
+                                "ctor", e);
                 }
             if (br != null)
                 try {
                     br.close();
                 } catch (IOException e) {
-                    if (OpenShiftOAuth2SecurityRealm.LOGGER.isLoggable(Level.FINE))
-                        OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.FINE, "generateResponse", e);
+                    if (OpenShiftOAuth2SecurityRealm.LOGGER
+                            .isLoggable(Level.FINE))
+                        OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.FINE,
+                                "generateResponse", e);
                 }
-            
-        }
-	}
 
-	public void generateResponse(StaplerRequest req, StaplerResponse rsp,
-			Object node) throws IOException, ServletException {
-		PrintWriter w = rsp.getWriter();
-		if (w != null && req.getSession().getAttribute(OpenShiftOAuth2SecurityRealm.LOGGING_OUT) == null) {
+        }
+    }
+
+    public void generateResponse(StaplerRequest req, StaplerResponse rsp,
+            Object node) throws IOException, ServletException {
+        PrintWriter w = rsp.getWriter();
+        if (w != null
+                && req.getSession().getAttribute(
+                        OpenShiftOAuth2SecurityRealm.LOGGING_OUT) == null) {
             rsp.setContentType("text/html");
             for (String s : this.redirect) {
                 w.println(s);
             }
-			w.flush();
-		} else {
-			rsp.sendRedirect(statusCode, url);
-		}
-	}
+            w.flush();
+        } else {
+            rsp.sendRedirect(statusCode, url);
+        }
+    }
 
-	/**
-	 * @param relative
-	 *            The path relative to the context path. The context path + this
-	 *            value is sent to the user.
-	 * @deprecated Use {@link HttpResponses#redirectViaContextPath(String)}.
-	 */
-	public static HttpResponse fromContextPath(final String relative) {
-		return HttpResponses.redirectViaContextPath(relative);
-	}
+    /**
+     * @param relative
+     *            The path relative to the context path. The context path + this
+     *            value is sent to the user.
+     * @deprecated Use {@link HttpResponses#redirectViaContextPath(String)}.
+     */
+    public static HttpResponse fromContextPath(final String relative) {
+        return HttpResponses.redirectViaContextPath(relative);
+    }
 
-	/**
-	 * Redirect to "."
-	 */
-	public static HttpRedirect DOT = new HttpRedirect(".");
+    /**
+     * Redirect to "."
+     */
+    public static HttpRedirect DOT = new HttpRedirect(".");
 
-	/**
-	 * Redirect to the context root
-	 */
-	public static HttpResponse CONTEXT_ROOT = fromContextPath("");
+    /**
+     * Redirect to the context root
+     */
+    public static HttpResponse CONTEXT_ROOT = fromContextPath("");
 
 }

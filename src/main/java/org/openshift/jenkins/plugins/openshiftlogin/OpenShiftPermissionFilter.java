@@ -52,142 +52,192 @@ import com.google.api.client.http.HttpResponseException;
 import jenkins.model.Jenkins;
 
 /**
- * This servlet spec filter implementation serves as the hook point to periodically
- * poll OpenShift to see if the user specified by the OAuth session has had a change 
- * in the permissions maintained in OpenShift (where those permissions are mapped 
- * to the Jenkins permissions maintained in Jenkins' AuthorizationStrategy implementation.
+ * This servlet spec filter implementation serves as the hook point to
+ * periodically poll OpenShift to see if the user specified by the OAuth session
+ * has had a change in the permissions maintained in OpenShift (where those
+ * permissions are mapped to the Jenkins permissions maintained in Jenkins'
+ * AuthorizationStrategy implementation.
  *
  */
 public class OpenShiftPermissionFilter implements Filter {
-	
-	private static final String LAST_SELF_SAR_POLL_TIME = "self-sar-time";
-	private static final long SELF_SAR_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes * 60 seconds * 1000 milliseconds
-	private static final String OPENSHIFT_PERMISSIONS_POLL_INTERVAL = "OPENSHIFT_PERMISSIONS_POLL_INTERVAL"; // doc says this is in seconds
-	private static final String OPENSHIFT_ACCESS_VIA_BEARER_TOKEN = "OPENSHIFT_ACCESS_VIA_BEARER_TOKEN";
-	private static final int MAX_BEARER_CACHE_ENTRIES = 50;
-	private static String NEED_TO_AUTH = "\nYou need to supply credentials that allow you to be authenticated by OpenShift OAuth as a valid user who is assigned either the view, edit, or admin roles in the OpenShift project running this Jenkins instance. \n" +
-            "If operating from a browser, provide your user credentials when solicited by the OpenShift login page.  Otherwise, supply as a part of any HTTP requests you generate a HTTP Authorization Bearer header\n" +
-            "containing a token that correlates to your user credentials.\n";
 
-	
-	// the Jenkins crazy use of constructors vs. introspection / field setting means
-	// that after initial bringup, but following subsequent Jenkins restarts, we have
-	// to re-add our filter to the dynamic filter list Jenkins provides.  We use this
-	// flag to track that (as init will be called when we add the filter); mark as transient
-	// so this is not persisted across restarts
-	transient boolean initCalled = false;
-	
-	class BearerCacheEntry {
-	    long lastCheck;
-	    UsernamePasswordAuthenticationToken token;
-	}
-	
-	transient LinkedHashMap<String,BearerCacheEntry> bearerCache = new LinkedHashMap<String,BearerCacheEntry>(MAX_BEARER_CACHE_ENTRIES) {
+    private static final String LAST_SELF_SAR_POLL_TIME = "self-sar-time";
+    private static final long SELF_SAR_POLL_INTERVAL = 5 * 60 * 1000; // 5
+                                                                      // minutes
+                                                                      // * 60
+                                                                      // seconds
+                                                                      // * 1000
+                                                                      // milliseconds
+    private static final String OPENSHIFT_PERMISSIONS_POLL_INTERVAL = "OPENSHIFT_PERMISSIONS_POLL_INTERVAL"; // doc
+                                                                                                             // says
+                                                                                                             // this
+                                                                                                             // is
+                                                                                                             // in
+                                                                                                             // seconds
+    private static final String OPENSHIFT_ACCESS_VIA_BEARER_TOKEN = "OPENSHIFT_ACCESS_VIA_BEARER_TOKEN";
+    private static final int MAX_BEARER_CACHE_ENTRIES = 50;
+    private static String NEED_TO_AUTH = "\nYou need to supply credentials that allow you to be authenticated by OpenShift OAuth as a valid user who is assigned either the view, edit, or admin roles in the OpenShift project running this Jenkins instance. \n"
+            + "If operating from a browser, provide your user credentials when solicited by the OpenShift login page.  Otherwise, supply as a part of any HTTP requests you generate a HTTP Authorization Bearer header\n"
+            + "containing a token that correlates to your user credentials.\n";
+
+    // the Jenkins crazy use of constructors vs. introspection / field setting
+    // means
+    // that after initial bringup, but following subsequent Jenkins restarts, we
+    // have
+    // to re-add our filter to the dynamic filter list Jenkins provides. We use
+    // this
+    // flag to track that (as init will be called when we add the filter); mark
+    // as transient
+    // so this is not persisted across restarts
+    transient boolean initCalled = false;
+
+    class BearerCacheEntry {
+        long lastCheck;
+        UsernamePasswordAuthenticationToken token;
+    }
+
+    transient LinkedHashMap<String, BearerCacheEntry> bearerCache = new LinkedHashMap<String, BearerCacheEntry>(
+            MAX_BEARER_CACHE_ENTRIES) {
 
         @Override
-        protected boolean removeEldestEntry(Entry<String, BearerCacheEntry> eldest) {
+        protected boolean removeEldestEntry(
+                Entry<String, BearerCacheEntry> eldest) {
             return size() > MAX_BEARER_CACHE_ENTRIES;
         }
-	    
+
     };
-	
-	public OpenShiftPermissionFilter() {
-	}
 
-	@Override
-	public void init(FilterConfig filterConfig) throws ServletException {
-	    initCalled = true;
-	}
+    public OpenShiftPermissionFilter() {
+    }
 
-	@Override
-	public void doFilter(ServletRequest request, ServletResponse response,
-			FilterChain chain) throws IOException, ServletException {
-		try {
-		    boolean updated = OpenShiftSetOAuth.setOauth(false);
-			final HttpServletRequest httpRequest = (HttpServletRequest) request;
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {
+        initCalled = true;
+    }
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response,
+            FilterChain chain) throws IOException, ServletException {
+        try {
+            boolean updated = OpenShiftSetOAuth.setOauth(false);
+            final HttpServletRequest httpRequest = (HttpServletRequest) request;
             long interval = SELF_SAR_POLL_INTERVAL;
-            String var = EnvVars.masterEnvVars.get(OPENSHIFT_PERMISSIONS_POLL_INTERVAL);
+            String var = EnvVars.masterEnvVars
+                    .get(OPENSHIFT_PERMISSIONS_POLL_INTERVAL);
             if (var != null) {
                 try {
                     interval = Long.parseLong(var);
                 } catch (Throwable t) {
-                    
+
                 }
             }
-			HttpSession s = httpRequest.getSession(false);
-			if (s != null) {
-				
-				OAuthSession oauth = (OAuthSession) s.getAttribute(OAuthSession.SESSION_NAME);
-				if (oauth != null && oauth.getCredential() != null) {
-					try {
-						Long lastPermissionPoll = (Long) s.getAttribute(OAuthSession.SESSION_NAME + LAST_SELF_SAR_POLL_TIME);
-						if (lastPermissionPoll == null) {
-							lastPermissionPoll = new Long(System.currentTimeMillis());
-							s.setAttribute(OAuthSession.SESSION_NAME + LAST_SELF_SAR_POLL_TIME, new Long(System.currentTimeMillis()));
-						}
-						
-						if (updated || (System.currentTimeMillis() - lastPermissionPoll.longValue() > (interval * 1000))) {
-							OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins.getInstance().getSecurityRealm();
-							secRealm.updateAuthorizationStrategy(oauth.getCredential());
-							s.setAttribute(OAuthSession.SESSION_NAME + LAST_SELF_SAR_POLL_TIME, new Long(System.currentTimeMillis()));
-						}
-					} catch (Throwable t) {
-						OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.SEVERE, "filter", t);
-					}
-				}
-			} else if (Jenkins.getInstance().getSecurityRealm() instanceof OpenShiftOAuth2SecurityRealm) {
-			    // support for non-browser, like curl, access to jenkins with openshift oauth security;
-			    // by choice, not storing auth in http session (remember, no browser) or anything like that;
-			    // want the token provided on each access 
-			    try {
-			        String enabled = EnvVars.masterEnvVars.get(OPENSHIFT_ACCESS_VIA_BEARER_TOKEN);
-			        if (enabled == null || !enabled.equalsIgnoreCase("false")) {
-	                    String authHdr = httpRequest.getHeader("Authorization");
-	                    if (authHdr != null && authHdr.length() > 0 && authHdr.startsWith("Bearer")) {
-	                        String[] words = authHdr.split(" ");
-	                        if (words.length > 1) {
-	                            String token = words[1];
-	                            
-	                            BearerCacheEntry entry = bearerCache.get(token);
-	                            if (entry == null) {
+            HttpSession s = httpRequest.getSession(false);
+            if (s != null) {
+
+                OAuthSession oauth = (OAuthSession) s
+                        .getAttribute(OAuthSession.SESSION_NAME);
+                if (oauth != null && oauth.getCredential() != null) {
+                    try {
+                        Long lastPermissionPoll = (Long) s
+                                .getAttribute(OAuthSession.SESSION_NAME
+                                        + LAST_SELF_SAR_POLL_TIME);
+                        if (lastPermissionPoll == null) {
+                            lastPermissionPoll = new Long(
+                                    System.currentTimeMillis());
+                            s.setAttribute(OAuthSession.SESSION_NAME
+                                    + LAST_SELF_SAR_POLL_TIME,
+                                    new Long(System.currentTimeMillis()));
+                        }
+
+                        if (updated
+                                || (System.currentTimeMillis()
+                                        - lastPermissionPoll.longValue() > (interval * 1000))) {
+                            OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins
+                                    .getInstance().getSecurityRealm();
+                            secRealm.updateAuthorizationStrategy(oauth
+                                    .getCredential());
+                            s.setAttribute(OAuthSession.SESSION_NAME
+                                    + LAST_SELF_SAR_POLL_TIME,
+                                    new Long(System.currentTimeMillis()));
+                        }
+                    } catch (Throwable t) {
+                        OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.SEVERE,
+                                "filter", t);
+                    }
+                }
+            } else if (Jenkins.getInstance().getSecurityRealm() instanceof OpenShiftOAuth2SecurityRealm) {
+                // support for non-browser, like curl, access to jenkins with
+                // openshift oauth security;
+                // by choice, not storing auth in http session (remember, no
+                // browser) or anything like that;
+                // want the token provided on each access
+                try {
+                    String enabled = EnvVars.masterEnvVars
+                            .get(OPENSHIFT_ACCESS_VIA_BEARER_TOKEN);
+                    if (enabled == null || !enabled.equalsIgnoreCase("false")) {
+                        String authHdr = httpRequest.getHeader("Authorization");
+                        if (authHdr != null && authHdr.length() > 0
+                                && authHdr.startsWith("Bearer")) {
+                            String[] words = authHdr.split(" ");
+                            if (words.length > 1) {
+                                String token = words[1];
+
+                                BearerCacheEntry entry = bearerCache.get(token);
+                                if (entry == null) {
                                     entry = new BearerCacheEntry();
                                     bearerCache.put(token, entry);
                                     entry.lastCheck = 0;
-	                            }
-	                            if (updated || System.currentTimeMillis() - entry.lastCheck > (interval * 1000)) {
-	                                entry.lastCheck = new Long(System.currentTimeMillis());
-	                                final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod()).setAccessToken(token);
-	                                OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins.getInstance().getSecurityRealm();
-	                                UsernamePasswordAuthenticationToken jenkinsToken = secRealm.updateAuthorizationStrategy(credential);
-	                                
-	                                //TODO can we assume that once a token is invalid, it is always invalid?  If so, we could put storage of the token
-	                                // before the token validity check and cached checks to invalid tokens as well; note, if token is invalid, an
-	                                // exception is thrown and we don't get to this line
-                                    entry.token = jenkinsToken;
-	                            } else if (entry.token != null) {
-	                                SecurityContextHolder.getContext().setAuthentication(entry.token);
-	                            } else {
-	                                HttpServletResponse httpResponse = (HttpServletResponse)response;
-	                                httpResponse.sendError(401, NEED_TO_AUTH);
-	                            }
-	                        }
-	                    }
-			        }
-			    } catch (HttpResponseException e) {
-			        HttpServletResponse httpResponse = (HttpServletResponse)response;
-			        httpResponse.sendError(e.getStatusCode(), e.getMessage() + NEED_TO_AUTH);
-			    } catch (Throwable t) {
-                    OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.SEVERE, "filter", t);
-                }
-			}
-			
-		} finally {
-			    chain.doFilter(request, response);
-		}
-	}
+                                }
+                                if (updated
+                                        || System.currentTimeMillis()
+                                                - entry.lastCheck > (interval * 1000)) {
+                                    entry.lastCheck = new Long(
+                                            System.currentTimeMillis());
+                                    final Credential credential = new Credential(
+                                            BearerToken
+                                                    .authorizationHeaderAccessMethod())
+                                            .setAccessToken(token);
+                                    OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins
+                                            .getInstance().getSecurityRealm();
+                                    UsernamePasswordAuthenticationToken jenkinsToken = secRealm
+                                            .updateAuthorizationStrategy(credential);
 
-	@Override
-	public void destroy() {
-	}
+                                    // TODO can we assume that once a token is
+                                    // invalid, it is always invalid? If so, we
+                                    // could put storage of the token
+                                    // before the token validity check and
+                                    // cached checks to invalid tokens as well;
+                                    // note, if token is invalid, an
+                                    // exception is thrown and we don't get to
+                                    // this line
+                                    entry.token = jenkinsToken;
+                                } else if (entry.token != null) {
+                                    SecurityContextHolder.getContext()
+                                            .setAuthentication(entry.token);
+                                } else {
+                                    HttpServletResponse httpResponse = (HttpServletResponse) response;
+                                    httpResponse.sendError(401, NEED_TO_AUTH);
+                                }
+                            }
+                        }
+                    }
+                } catch (HttpResponseException e) {
+                    HttpServletResponse httpResponse = (HttpServletResponse) response;
+                    httpResponse.sendError(e.getStatusCode(), e.getMessage()
+                            + NEED_TO_AUTH);
+                } catch (Throwable t) {
+                    OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.SEVERE,
+                            "filter", t);
+                }
+            }
+
+        } finally {
+            chain.doFilter(request, response);
+        }
+    }
+
+    @Override
+    public void destroy() {
+    }
 
 }

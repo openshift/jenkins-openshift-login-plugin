@@ -28,16 +28,16 @@ import com.google.api.client.util.Key;
 
 public class OpenShiftSubjectAccessReviewResponse {
 
-	public OpenShiftSubjectAccessReviewResponse() {
-	}
-	
-	@Key
-	public String namespace;
-	
-	@Key
-	public boolean allowed;
-	
-	@Key
-	public String reason;
+    public OpenShiftSubjectAccessReviewResponse() {
+    }
+
+    @Key
+    public String namespace;
+
+    @Key
+    public boolean allowed;
+
+    @Key
+    public String reason;
 
 }

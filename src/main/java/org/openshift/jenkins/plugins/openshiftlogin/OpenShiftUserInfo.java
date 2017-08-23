@@ -40,32 +40,33 @@ import java.io.IOException;
  */
 public class OpenShiftUserInfo extends UserProperty {
 
-	public static class Metadata extends UserProperty {
-		@Key
-		public String name;
-		
-		@Key
-		public String uid;
-	}
-	
-	@Key
-	public Metadata metadata;
-	
-	@Key
-	public String email;
-	
+    public static class Metadata extends UserProperty {
+        @Key
+        public String name;
+
+        @Key
+        public String uid;
+    }
+
+    @Key
+    public Metadata metadata;
+
+    @Key
+    public String email;
+
     public String getEmail() {
         return email;
     }
 
     public String getName() {
-    	if (metadata == null)
-    		return null;
+        if (metadata == null)
+            return null;
         return metadata.name;
     }
 
     /**
-     * Updates the user information on Jenkins based on the information in this identity.
+     * Updates the user information on Jenkins based on the information in this
+     * identity.
      */
     public void updateProfile(hudson.model.User u) throws IOException {
         // update the user profile by the externally given information
