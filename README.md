@@ -102,3 +102,7 @@ directory is shared across multiple Jenkins installations
 * client secret (optional):  override for the service account token (the 'token' file under the service account directory); allows one to change permissions for the OAuth client during the OAuth authentication flows if the service account 
 directory is shared across multiple Jenkins installations
 
+
+## JVMs
+
+This plugin has been developed and tested almost exclusively with the OpenJDK JVM.  However, user testing has confirmed that it can run inside an IBM JDK if `-Dcom.ibm.jsse2.overrideDefaultTLS=true` is supplied as a JVM argument when starting Jenkins.
