@@ -114,15 +114,17 @@ public abstract class OAuthSession {
         }
         AuthorizationCodeResponseUrl responseUrl = new AuthorizationCodeResponseUrl(
                 buf.toString());
+        String diagnosticPointer = ", see https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html#api-events-oauth-clients"
+                + " for possible hints on how to diagnose problems in OpenShift that could cause this.";
         if (!uuid.equals(responseUrl.getState())) {
             return HttpResponses.error(401, "State is invalid; uuid == " + uuid
-                    + " resp state == " + responseUrl.getState());
+                    + " resp state == " + responseUrl.getState() + diagnosticPointer);
         }
         String code = responseUrl.getCode();
         if (responseUrl.getError() != null) {
-            return HttpResponses.error(401, "Error from provider: " + code);
+            return HttpResponses.error(401, "Error from provider: " + code + diagnosticPointer);
         } else if (code == null) {
-            return HttpResponses.error(404, "Missing authorization code");
+            return HttpResponses.error(404, "Missing authorization code" + diagnosticPointer);
         } else {
             return onSuccess(code);
         }
