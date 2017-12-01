@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <head>
-  <title>Login to Jenkins using your OpenShift credentials</title>
+  <title>Log in to Jenkins using your OpenShift credentials</title>
   <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -45,11 +45,14 @@ img {
   margin-top: 30px;
 }
 .btn {
+  box-shadow: 0 2px 3px rgba(3,3,3,.1);
   display: inline-block;
   margin-bottom: 0;
   font-weight: 600;
   text-align: center;
   vertical-align: middle;
+  -ms-touch-action: manipulation;
+  touch-action: manipulation;
   cursor: pointer;
   background-image: none;
   border: 1px solid transparent;
@@ -64,6 +67,11 @@ img {
   -ms-user-select: none;
   user-select: none;
 }
+.btn:active,
+.btn.active {
+  box-shadow: inset 0 2px 8px rgba(3,3,3,.2);
+  outline: 0;
+}
 .btn:focus,
 .btn:active:focus,
 .btn.active:focus {
@@ -71,38 +79,37 @@ img {
   outline: 5px auto -webkit-focus-ring-color;
   outline-offset: -2px;
 }
-.btn:hover,
-.btn:focus {
-  color: #4d5258;
+.btn-lg {
+  border-radius: 1px;
+  font-size: 14px;
+  line-height: 1.3333333;
+  padding: 6px 10px;
+}
+.btn-primary {
+  background-color: #0088ce;
+  background-image: linear-gradient(to bottom,#39a5dc 0,#0088ce 100%);
+  background-repeat: repeat-x;
+  border-color: #00659c;
+  color: #fff;
+}
+.btn-primary.active,
+.btn-primary:active,
+.btn-primary:focus,
+.btn-primary:hover {
+  background-color: #0088ce;
+  background-image: none;
+  border-color: #00659c;
+  color: #fff;
   text-decoration: none;
 }
-.btn:active,
-.btn.active {
-  outline: 0;
-  background-image: none;
-  -webkit-box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
-  box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
-}
-
-.btn-primary {
-  color: #ffffff;
-  background-color: #189ad1;
-  border-color: #267da1;
-}
-.btn-primary:hover,
-.btn-primary:focus,
-.btn-primary:active,
-.btn-primary.active,
-.open .dropdown-toggle.btn-primary {
-  color: #ffffff;
-  background-color: #147fac;
-  border-color: #1a576f;
-}
-.btn-lg {
-  padding: 6px 10px;
-  font-size: 14px;
-  line-height: 1.33;
-  border-radius: 1px;
+.btn-primary.active.focus,
+.btn-primary.active:focus,
+.btn-primary.active:hover,
+.btn-primary:active.focus,
+.btn-primary:active:focus,
+.btn-primary:active:hover {
+  background-color: #0077b5;
+  border-color: #004e78;
 }
 .panel-login {
   background: #fff;
@@ -167,9 +174,6 @@ img {
 @media (min-width: 768px ) {
   .panel-login {
     margin-top: 165px;
-  }
-  .panel-login {
-    margin-top: 165px;
     padding: 50px 0;
   }
 }
@@ -189,8 +193,8 @@ img {
       " alt="OpenShift logo">
     </div>
     <div class="panel-content">
-      <p>Login to Jenkins using your OpenShift credentials</p>
-      <a href="#" class="btn btn-lg btn-primary">Login with OpenShift</a>
+      <p>Log in to Jenkins using your OpenShift credentials</p>
+      <a href="#" class="btn btn-lg btn-primary">Log in with OpenShift</a>
     </div>
   </div>
 </body>
