@@ -97,7 +97,7 @@ Once this project and related settings are defined in OpenShift, you can then go
 * service account name:  The service account used when authenticating users against the OAuth server running in OpenShift.
 * server prefix:  URI for the OpenShift OAuth endpoint (i.e. the OpenShift master endpoint)
 * redirect URL (optional): URL for the OpenShift API server that Jenkins redirects to when starting the authentication process; the plugin by default pull this information from the payload retrieved from the OpenShift endpoint https://<server prefix>/.well-known/oauth-authorization-server
-* client ID (optional):  override for the ID for the OpenShift OAuth client; default derived by namespace and service account names, and takes the form ""system:serviceaccount:<namespace>:<serviceaccountname>"; allows one to change the service account name the OAuth client during the OAuth authentication flows if the service account 
+* client ID (optional):  override for the ID for the OpenShift OAuth client; default derived by namespace and service account names, and takes the form `system:serviceaccount:<namespace>:<serviceaccountname>` allows one to change the service account name the OAuth client during the OAuth authentication flows if the service account 
 directory is shared across multiple Jenkins installations
 * client secret (optional):  override for the service account token (the 'token' file under the service account directory); allows one to change permissions for the OAuth client during the OAuth authentication flows if the service account 
 directory is shared across multiple Jenkins installations
