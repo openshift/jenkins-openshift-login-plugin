@@ -183,12 +183,18 @@ public class OpenShiftPermissionFilter implements Filter {
                                 String token = words[1];
 
                                 BearerCacheEntry entry = bearerCache.get(token);
+                                boolean firstTime = false;
                                 if (entry == null) {
                                     entry = new BearerCacheEntry();
                                     bearerCache.put(token, entry);
                                     entry.lastCheck = 0;
+                                    // we check for first time in case system time is say reset to 1970
+                                    // (perhaps we are in a VM that just spun up and the time has not been set)
+                                    // we are not going to bother finding a negative number big enough to ensure 
+                                    // we are greater than interval * 100 in this case
+                                    firstTime = true;
                                 }
-                                if (updated
+                                if (updated || firstTime
                                         || System.currentTimeMillis()
                                                 - entry.lastCheck > (interval * 1000)) {
                                     entry.lastCheck = new Long(
@@ -199,6 +205,7 @@ public class OpenShiftPermissionFilter implements Filter {
                                             .setAccessToken(token);
                                     OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins
                                             .getInstance().getSecurityRealm();
+                                    //REMINDER - updateAuthorizationStrategy will call SecurityContextHolder.getContext().setAuthentication
                                     UsernamePasswordAuthenticationToken jenkinsToken = secRealm
                                             .updateAuthorizationStrategy(credential);
 
