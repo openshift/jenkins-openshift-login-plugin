@@ -93,6 +93,10 @@ public class OpenShiftSetOAuth {
                         }
                     }
                 }
+            } else {
+                // make sure filter is in place for restart scenarios
+                OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm)priorSecurityRealm;
+                secRealm.createFilter();
             }
         }
         return false;
