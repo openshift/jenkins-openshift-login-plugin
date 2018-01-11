@@ -39,10 +39,18 @@ authentication is successful examines the following elements in this order:
 
 * first the `from` query parameter of the initial login URL is examined to see if it is a valid URL
 * second the `referer` header of the initial login URL is examined to see if it is a valid URL
-* lastly, the root URL for the Jenkins instance is used; if you have explicitly configured a root URL for your Jenkins
+* third, the root URL for the Jenkins instance is used; if you have explicitly configured a root URL for your Jenkins
 server, then you must ensure that URL has been added to the OAuth list of allowed redirect URLs on the service account
 used for authenticating users 
+* lastly, the OAuth server in OpenShift master needs to be informed that the URL you use for accessing Jenkins is allowed to participate in an OAuth redirect flow.  The various ways to do that are explained in the [OpenShift OAuth documentation](https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html#redirect-uris-for-service-accounts).  If you happen to provision Jenkins in OpenShift using the example [jenkins-ephemeral](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-ephemeral-template.json) or [jenkins-persistent](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-persistent-template.json) templates, the service account used for authenticating users is annotated such that the OpenShift OAuth server will accept redirect flows when it is involved:
 
+     ```
+    "annotations": {
+       "serviceaccounts.openshift.io/oauth-redirectreference.jenkins": "{\"kind\":\"OAuthRedirectReference\",\"apiVersion\":\"v1\",\"reference\":{\"kind\":\"Route\",\"name\":\"${JENKINS_SERVICE_NAME}\"}}"
+    }
+
+    ``` 
+ 
 ### Non-browser access
 
 For non-browser, direct HTTP or HTTPS access to Jenkins when the plugin manages authentication, a HTTP bearer token authentication header must be supplied with an OpenShift token which has sufficient permissions to access the project that Jenkins is running in. A suggested token to use is a token associated with the service account for the project Jenkins in running in.  If you started
