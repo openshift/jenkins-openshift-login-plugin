@@ -423,8 +423,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                             this.defaultedServiceAccountDirectory,
                             this.serviceAccountName,
                             this.defaultedServiceAccountName, this.clientId,
-                            this.defaultedClientId, this.clientSecret,
-                            this.defaultedClientSecret, this.redirectURL,
+                            this.defaultedClientId, (Secret.toString(this.clientSecret).length() > 6 ? Secret.toString(this.clientSecret).substring(0, 5) + "......." : "null"),
+                            (this.defaultedClientSecret != null && this.defaultedClientSecret.length() > 6 ? this.defaultedClientSecret.substring(0, 5) + "......." : "null"), this.redirectURL,
                             this.defaultedRedirectURL, this.serverPrefix,
                             this.defaultedServerPrefix));
 
