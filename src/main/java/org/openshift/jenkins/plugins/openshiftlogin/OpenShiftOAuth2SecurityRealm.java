@@ -798,16 +798,20 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                         newAuthMgr = new GlobalMatrixAuthorizationStrategy();
                     }
 
-                    for (String userGroup : usersGroups) {
-                        // copy any of the other users' permissions from the
-                        // prior auth mgr to our new one
-                        for (PermissionGroup pg : permissionGroups) {
-                            for (Permission p : pg.getPermissions()) {
-                                if (existingAuthMgr.hasPermission(userGroup, p)) {
-                                    newAuthMgr.add(p, userGroup);
+                    if (newAuthMgr != null) {
+                        for (String userGroup : usersGroups) {
+                            // copy any of the other users' permissions from the
+                            // prior auth mgr to our new one
+                            for (PermissionGroup pg : permissionGroups) {
+                                for (Permission p : pg.getPermissions()) {
+                                    if (existingAuthMgr.hasPermission(userGroup, p)) {
+                                        newAuthMgr.add(p, userGroup);
+                                    }
                                 }
                             }
+
                         }
+
                         LOGGER.info(String
                                 .format("OpenShift OAuth: adding permissions for user %s, stored in the matrix as %s, based on OpenShift roles %s",
                                         info.getName(), matrixKey, allowedRoles));
@@ -851,10 +855,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                             newAuthMgr.add(CredentialsProvider.MANAGE_DOMAINS,
                                     matrixKey);
                         }
-
-                    }
-
-                    if (newAuthMgr != null) {
+                        
                         Jenkins.getInstance().setAuthorizationStrategy(
                                 newAuthMgr);
                         Jenkins.getInstance().save();
