@@ -784,6 +784,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                             .format("OpenShift OAuth: user %s, stored in the matrix as %s, based on OpenShift roles %s already exists in Jenkins",
                                     info.getName(), matrixKey, allowedRoles));
                 } else {
+                    usersGroups.add(matrixKey);
                     List<PermissionGroup> permissionGroups = new ArrayList<PermissionGroup>(
                             PermissionGroup.getAll());
                     if (LOGGER.isLoggable(Level.FINE))
