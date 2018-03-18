@@ -159,7 +159,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     /**
      * The transport loaded with a service account secret.
      */
-    private HttpTransport transport;
+    private transient HttpTransport transport;
 
     /**
      * The service account directory, if set, instructs the plugin to follow the
