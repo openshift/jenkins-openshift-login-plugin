@@ -158,8 +158,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
     /**
      * The transport loaded with a service account secret.
+     * Marked static for https://jenkins.io/blog/2018/03/15/jep-200-lts/#after-the-upgrade
+     * Will get repopulated on restart
      */
-    private transient HttpTransport transport;
+    private static HttpTransport transport;
 
     /**
      * The service account directory, if set, instructs the plugin to follow the
@@ -273,10 +275,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
         this.serviceAccountName = Util.fixEmpty(serviceAccountName);
 
-        this.transport = transport;
+        OpenShiftOAuth2SecurityRealm.transport = transport;
 
         if (testTransport != null)
-            this.transport = testTransport;
+            OpenShiftOAuth2SecurityRealm.transport = testTransport;
         else
             populateDefaults();
 
@@ -858,7 +860,18 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                         
                         Jenkins.getInstance().setAuthorizationStrategy(
                                 newAuthMgr);
-                        Jenkins.getInstance().save();
+                        try {
+                            Jenkins.getInstance().save();
+                        } catch (Throwable t) {
+                            // see https://jenkins.io/blog/2018/03/15/jep-200-lts/#after-the-upgrade
+                            // running on 2.107 ... seen intermittent errors here, even after 
+                            // marking transport transient (as the xml stuff does not use standard
+                            // serialization; switch from transient instance var to static var to 
+                            // attempt to avoid xml marshalling;
+                            // Always logging for now, but will monitor and bracket with a FINE 
+                            // logging level check if this becomes very verbose.
+                            LOGGER.log(Level.INFO, "updateAuthorizationStrategy", t);
+                        }
                     }
                 }
 
