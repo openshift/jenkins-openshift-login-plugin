@@ -41,6 +41,7 @@ public class OpenShiftSetOAuth {
             .getName());
     static final String OPENSHIFT_ENABLE_OAUTH = "OPENSHIFT_ENABLE_OAUTH";
     static long lastCheck = 0;
+    static int lastLog = 0;
 
     static boolean setOauth() {
         return setOauth(true);
@@ -77,9 +78,10 @@ public class OpenShiftSetOAuth {
                             try {
                                 inOpenShiftPod = osrealm.populateDefaults();
                             } catch (Throwable t) {
-                                if (LOGGER.isLoggable(Level.FINE))
-                                    LOGGER.log(Level.FINE,
-                                            "OpenShiftItemListener", t);
+                                if ((lastLog % 100) == 0) {
+                                    LOGGER.log(Level.SEVERE, "OpenShiftSetOAuth", t);
+                                }
+                                lastLog++;
                             }
                             LOGGER.info("OpenShift OAuth: running in OpenShift pod with required OAuth features: "
                                     + inOpenShiftPod);
@@ -89,7 +91,20 @@ public class OpenShiftSetOAuth {
                                 return true;
                             }
                         } catch (IOException e1) {
+                            if ((lastLog % 100) == 0) {
+                                LOGGER.log(Level.SEVERE, "OpenShiftSetOAuth", e1);
+                            }
+                            lastLog++;
                         } catch (GeneralSecurityException e1) {
+                            if ((lastLog % 100) == 0) {
+                                LOGGER.log(Level.SEVERE, "OpenShiftSetOAuth", e1);
+                            }
+                            lastLog++;
+                        } catch (Throwable t) {
+                            if ((lastLog % 100) == 0) {
+                                LOGGER.log(Level.SEVERE, "OpenShiftSetOAuth", t);
+                            }
+                            lastLog++;
                         }
                     }
                 }
