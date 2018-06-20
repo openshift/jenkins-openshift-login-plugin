@@ -78,6 +78,7 @@ For the `edit` role, in addition to the permissions available to `view`:
 * hudson.model.Item.CONFIGURE
 * hudson.model.Item.CREATE
 * hudson.model.Item.DELETE
+* hudson.model.Item.CANCEL
 * hudson.model.Item.WORKSPACE
 * hudson.scm.SCM.TAG
 * jenkins.model.Jenkins.RUN_SCRIPTS
