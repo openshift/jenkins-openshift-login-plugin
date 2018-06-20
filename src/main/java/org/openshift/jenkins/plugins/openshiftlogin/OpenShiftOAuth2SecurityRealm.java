@@ -834,6 +834,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                             newAuthMgr.add(Item.CONFIGURE, matrixKey);
                             newAuthMgr.add(Item.CREATE, matrixKey);
                             newAuthMgr.add(Item.DELETE, matrixKey);
+                            newAuthMgr.add(Item.CANCEL, matrixKey);
                             newAuthMgr.add(Item.WORKSPACE, matrixKey);
                             newAuthMgr.add(SCM.TAG, matrixKey);
                             newAuthMgr.add(Jenkins.RUN_SCRIPTS, matrixKey);
