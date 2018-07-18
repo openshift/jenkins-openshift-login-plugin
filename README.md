@@ -44,22 +44,28 @@ server, then you must ensure that URL has been added to the OAuth list of allowe
 used for authenticating users 
 * lastly, the OAuth server in OpenShift master needs to be informed that the URL you use for accessing Jenkins is allowed to participate in an OAuth redirect flow.  The various ways to do that are explained in the [OpenShift OAuth documentation](https://docs.openshift.org/latest/architecture/additional_concepts/authentication.html#redirect-uris-for-service-accounts).  If you happen to provision Jenkins in OpenShift using the example [jenkins-ephemeral](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-ephemeral-template.json) or [jenkins-persistent](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-persistent-template.json) templates, the service account used for authenticating users is annotated such that the OpenShift OAuth server will accept redirect flows when it is involved:
 
-     ```
-    "annotations": {
+  ```
+  "annotations": {
        "serviceaccounts.openshift.io/oauth-redirectreference.jenkins": "{\"kind\":\"OAuthRedirectReference\",\"apiVersion\":\"v1\",\"reference\":{\"kind\":\"Route\",\"name\":\"${JENKINS_SERVICE_NAME}\"}}"
-    }
-
-    ``` 
+  }
+  ``` 
  
 ### Non-browser access
 
 For non-browser, direct HTTP or HTTPS access to Jenkins when the plugin manages authentication, a HTTP bearer token authentication header must be supplied with an OpenShift token which has sufficient permissions to access the project that Jenkins is running in. A suggested token to use is a token associated with the service account for the project Jenkins in running in.  If you started
 Jenkins using the example [jenkins-ephemeral](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-ephemeral-template.json) or [jenkins-persistent](https://github.com/openshift/origin/blob/master/examples/jenkins/jenkins-persistent-template.json) templates, the commands to display the token are:
 
-    ```
-    $ oc describe serviceaccount jenkins
-    $ oc describe secret <serviceaccount secret name>
-    ``` 
+```
+$ oc describe serviceaccount jenkins
+$ oc describe secret <serviceaccount secret name>
+```
+
+This token can be extracted, Base64 decoded, and passed along as a bearer token when communicating with Jenkins such as validating Jenkinsfiles:
+
+```
+$ JENKINS_TOKEN=$(oc get secret <serviceaccount secret name> -o=jsonpath={.data.token} | base64 -D)
+$ curl --silent -X POST -H "Authorization: Bearer ${JENKINS_TOKEN}" -F "jenkinsfile=<Jenkinsfile" "<Jenkins URL>/pipeline-model-converter/validate"
+```
     
 ### OpenShift role to Jenkins permission mapping    
 
