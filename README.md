@@ -91,7 +91,24 @@ For the `edit` role, in addition to the permissions available to `view`:
 
 Users authenticated against OpenShift OAuth will be added to the Jenkins authorization matrix upon their first successful login.
 
-Permissions for users in Jenkins can be changed in OpenShift after those users are initially established in Jenkins.  The OpenShift Login plugin polls the OpenShift API server for permissions and will update the permissions stored in
+Now, with v1.0.10 of this plugin, you can change
+
+* Which OpenShift Roles are checked for authorization
+* Which Jenkins permissions map to which OpenShift Roles
+
+This plugin will look at for a ConfigMap named openshift-jenkins-login-plugin-config.  Typically, when running Jenkins in an OpenShift Pod, it 
+will look in the namespace that Jenkins is running in.  Otherwise, it looks in the namespace specified in the "client ID" as explained in ["Secondary Scenarios" down below.](#secondary-scenarios) 
+
+If this plugin finds and can read in that ConfigMap, it then:
+
+* The key/value pairs in the ConfigMap are a Jenkins permission to OpenShift Role mapping.
+* The key is the Jenkins permission group short ID and the Jenkins permission short ID, with those two separated by a hyphen or `-` character.
+* So if you want to add the Overall Jenkins Administer permission to an OpenShift Role, the key should be `Overall-Administer`
+* To get a sense of which permission groups and permissions IDs are available, go the the matrix authorization page in the Jenkins console and IDs for the groups and individual permissions in the table they provide.
+* The value of the key/value pair is the list of OpenShift Roles the permission should apply to, with each role separated by a comma or `,`.
+* So if you want to add the Overall Jenkins Administer permission to say both the default `admin` and `edit` roles, as well as a new `jenkins` role you have created, the value for the key `Overall-Administer` would be `admin,edit,jenkins`.    
+
+Finally, permissions for users in Jenkins, and OpenShift to Jenkins permission mapping, can be changed in OpenShift after those users are initially established in Jenkins.  The OpenShift Login plugin polls the OpenShift API server for permissions and will update the permissions stored in
 Jenkins for each Jenkins user with the permissions retrieved from OpenShift.  Technically speaking, you can change the permissions for a Jenkins user from the Jenkins UI as well, but those changes will be overwritten the next
 time the poll occurs.
 
