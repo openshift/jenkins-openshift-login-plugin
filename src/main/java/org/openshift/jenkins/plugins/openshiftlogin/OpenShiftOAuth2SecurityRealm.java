@@ -38,8 +38,10 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -124,11 +126,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private static final String DISPLAY_NAME = "Login with OpenShift";
     private static final String LOGIN_URL = "securityRealm/commenceLogin";
 
-    private static final String[] ROLES = new String[] { "admin", "edit",
-            "view" };
 
     private static final String USER_URI = "/oapi/v1/users/~";
     private static final String SAR_URI = "/oapi/v1/subjectaccessreviews";
+    private static final String CONFIG_MAP_URI = "/api/v1/namespaces/%s/configmaps/openshift-jenkins-login-plugin-config";
     private static final String OAUTH_PROVIDER_URI = "/.well-known/oauth-authorization-server";
 
     private static final String K8S_HOST_ENV_VAR = "KUBERNETES_SERVICE_HOST";
@@ -146,6 +147,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
 
     private static final Object USER_UPDATE_LOCK = new Object();
+
+    private ArrayList<String> roles = new ArrayList<String>(Arrays.asList( "admin", "edit", "view" ));
 
     /**
      * Control the redirection URL for this realm. Exposed for testing.
@@ -587,9 +590,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         return requestFactory.buildPostRequest(url, contentAdmin);
     }
 
-    private Set<String> postSAR(final Credential credential,
+    private ArrayList<String> postSAR(final Credential credential,
             final HttpTransport transport) throws IOException {
-        HashSet<String> allowedVerbs = new HashSet<String>();
         HttpRequestFactory requestFactory = transport
                 .createRequestFactory(new HttpRequestInitializer() {
                     public void initialize(HttpRequest request)
@@ -600,7 +602,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                 });
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + SAR_URI);
 
-        for (String verb : ROLES) {
+        ArrayList<String> allowedRoles = new ArrayList<String>();
+        for (String verb : roles) {
             String json = buildSARJson(namespace, verb);
             HttpRequest request = this.buildPostSARRequest(requestFactory, url,
                     json);
@@ -613,11 +616,145 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                                     verb, review.namespace,
                                     Boolean.toString(review.allowed),
                                     review.reason));
-                if (review.allowed)
-                    allowedVerbs.add(verb);
+                if (review.allowed && !allowedRoles.contains(verb)) {
+                    allowedRoles.add(verb);
+                }
+                    
             }
         }
-        return allowedVerbs;
+        return allowedRoles;
+    }
+    
+    private Map<String, List<Permission>> getRoleToPermissionMap(final HttpTransport transport) {
+        // set up default
+        Map<String, List<Permission>> permMap = new HashMap<String, List<Permission>>();
+        ArrayList<Permission> viewPerms = new ArrayList<Permission>(Arrays.asList(
+                Hudson.READ,
+                Item.READ,
+                Item.DISCOVER,
+                CredentialsProvider.VIEW));
+        permMap.put("view", viewPerms);
+        ArrayList<Permission> editPerms = new ArrayList<Permission>(viewPerms);
+        editPerms.addAll(new ArrayList<Permission>(Arrays.asList(
+                Item.BUILD, 
+                Item.CONFIGURE,
+                Item.CREATE,
+                Item.DELETE,
+                Item.CANCEL,
+                Item.WORKSPACE,
+                SCM.TAG,
+                Jenkins.RUN_SCRIPTS)));
+        permMap.put("edit", editPerms);
+        ArrayList<Permission> adminPerms = new ArrayList<Permission>(editPerms);
+        adminPerms.addAll(new ArrayList<Permission>(Arrays.asList(
+                Computer.CONFIGURE,
+                Computer.DELETE,
+                Hudson.ADMINISTER,
+                Hudson.READ,
+                Run.DELETE,
+                Run.UPDATE,
+                View.CONFIGURE,
+                View.CREATE,
+                View.DELETE,
+                CredentialsProvider.CREATE,
+                CredentialsProvider.UPDATE,
+                CredentialsProvider.DELETE,
+                CredentialsProvider.MANAGE_DOMAINS)));
+        permMap.put("admin", adminPerms);
+        
+        final Credential credential = new Credential(
+                BearerToken.authorizationHeaderAccessMethod())
+                .setAccessToken(getDefaultedClientSecret().getPlainText());
+        HttpRequestFactory requestFactory = transport
+                .createRequestFactory(new HttpRequestInitializer() {
+                    public void initialize(HttpRequest request)
+                            throws IOException {
+                        credential.initialize(request);
+                        request.setParser(new JsonObjectParser(JSON_FACTORY));
+                    }
+                });
+        GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + String.format(CONFIG_MAP_URI, namespace));
+        HttpRequest request = null;
+        ConfigMapResponse response = null;
+        String prefix = "OpenShift Jenkins Login Plugin";
+        try {
+            request = requestFactory.buildGetRequest(url);
+            response = request.execute().parseAs(ConfigMapResponse.class);
+        } catch (IOException e) {
+            LOGGER.info(prefix + " could not find the openshift-jenkins-login-plugin-config config map in namespace " +
+                    namespace + " so the default permission mapping will be used");
+            LOGGER.log(Level.FINE, "getRoleToPermissionMap", e);
+            return permMap;
+        }
+        
+        
+        if (response == null || response.data == null || response.data.size() == 0) {
+            LOGGER.info(prefix + " did not see the openshift-jenkins-login-plugin-config config map in namespace " + 
+                    namespace + " so the default permission mapping will be used");
+            return permMap;
+        }
+                
+        permMap.clear();
+        List<Permission> permissionsInSystem = Permission.getAll();
+        for (Entry<String,String> entry : response.data.entrySet()) {
+            String permStr = entry.getKey();
+            
+            String[] permStrArr = permStr.trim().split("-");
+            if (permStrArr == null || permStrArr.length != 2) {
+                LOGGER.info(prefix + " ignore permission string " + permStr +
+                        " since if is not of the form <permGroupId>-<permId>");
+                continue;
+            }
+            
+            Permission perm = null;
+            for (Permission permInSys : permissionsInSystem) {
+                LOGGER.fine("permInSys.group.title.toString().trim() " + permInSys.group.title.toString().trim() );
+                LOGGER.fine("permStrArr[0].trim() " + permStrArr[0].trim());
+                LOGGER.fine("permInSys.name.trim() " + permInSys.name.trim());
+                LOGGER.fine("permStrArr[1].trim() " + permStrArr[1].trim());
+                if (permInSys.group.title.toString().trim().equalsIgnoreCase(permStrArr[0].trim())&&
+                    permInSys.name.trim().equalsIgnoreCase(permStrArr[1].trim())) {
+                    perm = permInSys;
+                    LOGGER.info(prefix + " matching configured permission " + permStr + " to Jenkins permission " + perm);
+                    break;
+                }
+            }
+            if (perm == null) {
+                LOGGER.warning(prefix + " could not find permission " + permStr + " in Jenkins list of all available permissions");
+                continue;
+            }
+            
+            String roleList = entry.getValue();
+            if (roleList == null) {
+                LOGGER.warning("No roles specified for permission " + permStr + " in login plugin config map");
+                continue;
+            }
+            String[] permRoles = roleList.split(",");
+            if (permRoles == null || permRoles.length == 0) {
+                LOGGER.warning("No roles specified for permission " + permStr + " in login plugin config map: " + roleList);
+            }
+                        
+            for (String role : permRoles ) {
+                // Permission class implements equals and hashCode
+                List<Permission> permList = permMap.get(role);
+                if (permList == null) {
+                    permList = new ArrayList<Permission>();
+                    permMap.put(role, permList);
+                }
+                if (!permList.contains(perm)) {
+                    LOGGER.info(prefix + " adding permission " + permStr + " for role " + role);
+                    permList.add(perm);
+                }
+            }
+        }
+        
+        roles.clear();
+        for (String key : permMap.keySet()) {
+            if (!roles.contains(key))
+                roles.add(key);
+        }
+        LOGGER.info(prefix + " using role list " + roles);
+        return permMap;
     }
 
     /**
@@ -701,7 +838,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             Credential credential) throws IOException, GeneralSecurityException {
         populateDefaults();
         OpenShiftUserInfo info = getOpenShiftUserInfo(credential, transport);
-        Set<String> allowedRoles = postSAR(credential, transport);
+        Map<String,List<Permission>> cfgedRolePermMap = getRoleToPermissionMap(transport);
+        ArrayList<String> allowedRoles = postSAR(credential, transport);
         GrantedAuthority[] authorities = new GrantedAuthority[] { SecurityRealm.AUTHENTICATED_AUTHORITY };
 
         // we append the role suffix to the name stored into Jenkins, since a
@@ -709,12 +847,13 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         // levels in openshift; however, for now, we make sure the display name
         // for Jenkins does not include this suffix
         String suffix = null;
-        if (allowedRoles.contains("admin"))
-            suffix = "-admin";
-        else if (allowedRoles.contains("edit"))
-            suffix = "-edit";
-        else if (allowedRoles.contains("view"))
-            suffix = "-view";
+        for (String role : allowedRoles) {
+            if (suffix == null) {
+                suffix = "-" + role;
+            } else {
+                suffix = suffix + "-" + role;
+            }
+        }
 
         // logs this user in.... with the index of
         // UsernamePasswordAuthenticationToken token being matrixKey, that will
@@ -814,49 +953,16 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
                         }
 
+                        // map OpenShift user based on role to Jenkins user with
+                        // analogous permissions
                         LOGGER.info(String
                                 .format("OpenShift OAuth: adding permissions for user %s, stored in the matrix as %s, based on OpenShift roles %s",
                                         info.getName(), matrixKey, allowedRoles));
-
-                        // map OpenShift user based on role to Jenkins user with
-                        // analogous permissions
-                        if (allowedRoles.contains("view")
-                                || allowedRoles.contains("edit")
-                                || allowedRoles.contains("admin")) {
-                            newAuthMgr.add(Hudson.READ, matrixKey);
-                            newAuthMgr.add(Item.READ, matrixKey);
-                            newAuthMgr.add(Item.DISCOVER, matrixKey);
-                            newAuthMgr.add(CredentialsProvider.VIEW, matrixKey);
-                        }
-                        if (allowedRoles.contains("edit")
-                                || allowedRoles.contains("admin")) {
-                            newAuthMgr.add(Item.BUILD, matrixKey);
-                            newAuthMgr.add(Item.CONFIGURE, matrixKey);
-                            newAuthMgr.add(Item.CREATE, matrixKey);
-                            newAuthMgr.add(Item.DELETE, matrixKey);
-                            newAuthMgr.add(Item.CANCEL, matrixKey);
-                            newAuthMgr.add(Item.WORKSPACE, matrixKey);
-                            newAuthMgr.add(SCM.TAG, matrixKey);
-                            newAuthMgr.add(Jenkins.RUN_SCRIPTS, matrixKey);
-                        }
-                        if (allowedRoles.contains("admin")) {
-                            newAuthMgr.add(Computer.CONFIGURE, matrixKey);
-                            newAuthMgr.add(Computer.DELETE, matrixKey);
-                            newAuthMgr.add(Hudson.ADMINISTER, matrixKey);
-                            newAuthMgr.add(Hudson.READ, matrixKey);
-                            newAuthMgr.add(Run.DELETE, matrixKey);
-                            newAuthMgr.add(Run.UPDATE, matrixKey);
-                            newAuthMgr.add(View.CONFIGURE, matrixKey);
-                            newAuthMgr.add(View.CREATE, matrixKey);
-                            newAuthMgr.add(View.DELETE, matrixKey);
-                            newAuthMgr.add(CredentialsProvider.CREATE,
-                                    matrixKey);
-                            newAuthMgr.add(CredentialsProvider.UPDATE,
-                                    matrixKey);
-                            newAuthMgr.add(CredentialsProvider.DELETE,
-                                    matrixKey);
-                            newAuthMgr.add(CredentialsProvider.MANAGE_DOMAINS,
-                                    matrixKey);
+                        for (String role : allowedRoles) {
+                            List<Permission> perms = cfgedRolePermMap.get(role);
+                            for (Permission perm : perms) {
+                                newAuthMgr.add(perm, matrixKey);
+                            }
                         }
                         
                         Jenkins.getInstance().setAuthorizationStrategy(
