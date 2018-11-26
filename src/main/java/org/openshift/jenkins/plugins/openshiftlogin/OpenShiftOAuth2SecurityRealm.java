@@ -148,7 +148,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
     private static final Object USER_UPDATE_LOCK = new Object();
 
-    private ArrayList<String> roles = new ArrayList<String>(Arrays.asList( "admin", "edit", "view" ));
+    // making this an instance variable lead to all sort of weird jenkins prompted 
+    // NPE issues of this not getting set through based on how this object was constructed 
+    private static final ArrayList<String> roles = new ArrayList<String>(Arrays.asList( "admin", "edit", "view" ));
 
     /**
      * Control the redirection URL for this realm. Exposed for testing.
@@ -284,7 +286,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             OpenShiftOAuth2SecurityRealm.transport = testTransport;
         else
             populateDefaults();
-
+        
         if (LOGGER.isLoggable(Level.FINE))
             LOGGER.fine(String
                     .format("ctor: derived default client id %s client secret %s sa dir %s transport %s",
@@ -605,8 +607,14 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         ArrayList<String> allowedRoles = new ArrayList<String>();
         for (String verb : roles) {
             String json = buildSARJson(namespace, verb);
+            if (json == null) {
+                LOGGER.info("DBG json null ... namespace " + namespace + " verb " + verb);
+            }
             HttpRequest request = this.buildPostSARRequest(requestFactory, url,
                     json);
+            if (request == null) {
+                LOGGER.info("DBG request null");
+            }
             OpenShiftSubjectAccessReviewResponse review = request.execute()
                     .parseAs(OpenShiftSubjectAccessReviewResponse.class);
             if (review != null) {
