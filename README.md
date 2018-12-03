@@ -1,7 +1,9 @@
 # openshift-login
 
 
-A Jenkins plugin which lets you login to Jenkins with your account on an OpenShift installation.
+A Jenkins plugin which lets you login to Jenkins with your account on an OpenShift installation.  
+
+This plugin requires use of the global matrix authorization strategy in Jenkins.
 
 
 ## Primary scenario
