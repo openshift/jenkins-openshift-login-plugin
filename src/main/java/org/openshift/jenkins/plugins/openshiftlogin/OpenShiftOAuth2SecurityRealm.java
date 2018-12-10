@@ -117,7 +117,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private static final String SCOPE_CHECK_ACCESS = "user:check-access";
 
     static final String DEFAULT_SVC_ACCT_DIR = "/run/secrets/kubernetes.io/serviceaccount";
-    static final String DEFAULT_SVR_PREFIX = "https://openshift.default.svc";
+    static final String DEFAULT_SVR_PREFIX = "https://kubernetes.default:443";
     static final String NAMESPACE = "namespace";
     private static final String TOKEN = "token";
     private static final String CA_CRT = "ca.crt";
