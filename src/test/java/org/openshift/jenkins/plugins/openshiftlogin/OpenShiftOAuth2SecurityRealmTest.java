@@ -79,7 +79,7 @@ public class OpenShiftOAuth2SecurityRealmTest {
 	    if (openshiftServer != null) {
 	    	tryIntegration = true;
 		} else {
-			openshiftServer = "https://openshift.default.svc";
+			openshiftServer = "https://kubernetes.default:443";
 		}
         clientID = Util.fixEmpty(System.getProperty("org.openshift.jenkins.plugins.openshiftlogin.clientID"));
         if (clientID == null)
