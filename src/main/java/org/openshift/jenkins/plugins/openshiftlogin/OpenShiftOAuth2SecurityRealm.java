@@ -127,8 +127,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private static final String LOGIN_URL = "securityRealm/commenceLogin";
 
 
-    private static final String USER_URI = "/oapi/v1/users/~";
-    private static final String SAR_URI = "/oapi/v1/subjectaccessreviews";
+    private static final String USER_URI = "/apis/user.openshift.io/v1/users/~";
+    private static final String SAR_URI = "/apis/authorization.openshift.io/v1/subjectaccessreviews";
     private static final String CONFIG_MAP_URI = "/api/v1/namespaces/%s/configmaps/openshift-jenkins-login-plugin-config";
     private static final String OAUTH_PROVIDER_URI = "/.well-known/oauth-authorization-server";
 
