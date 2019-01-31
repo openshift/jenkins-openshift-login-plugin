@@ -32,7 +32,7 @@ import com.google.api.client.util.Key;
 public class OpenShiftSubjectAccessReviewRequest {
 
     public static final String SUBJECT_ACCESS_REVIEW = "SubjectAccessReview";
-    public static final String V1 = "v1";
+    public static final String V1 = "authorization.openshift.io/v1";
     public static final String DEFAULT_RESOURCE_API_GROUP = "build.openshift.io";
     public static final String DEFAULT_RESOURCE = "jenkins";
 
