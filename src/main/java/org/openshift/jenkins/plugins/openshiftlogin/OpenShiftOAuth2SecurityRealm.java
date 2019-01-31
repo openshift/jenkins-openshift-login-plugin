@@ -393,6 +393,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                 // the hostname or ip/port that is only available within the
                 // cluster
                 this.defaultedRedirectURL = provider.issuer;
+                // for diagnostics: see if the provider endpoints are accessible, given what
+                // Mo told me about them moving the oauth server from internal to a route based external one
+                // on the fly
+                this.useProviderOAuthEndpoint(credential, transport);
             } else {
                 runningInOpenShiftPodWithRequiredOAuthFeatures = false;
             }
@@ -534,6 +538,55 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         OpenShiftProviderInfo info = request.execute().parseAs(
                 OpenShiftProviderInfo.class);
         return info;
+    }
+    
+    private boolean useProviderOAuthEndpoint(
+            final Credential credential, final HttpTransport transport) {
+        if (provider == null)
+            return false;
+        try {
+            HttpRequestFactory requestFactory = transport
+                    .createRequestFactory(new HttpRequestInitializer() {
+                        public void initialize(HttpRequest request)
+                                throws IOException {
+                            credential.initialize(request);
+                            request.setParser(new JsonObjectParser(JSON_FACTORY));
+                        }
+                    });
+            GenericUrl url = new GenericUrl(provider.token_endpoint);
+            HttpRequest request = requestFactory.buildGetRequest(url);
+            request.execute().getStatusCode();
+        } catch (com.google.api.client.http.HttpResponseException hre) {
+            if (hre.getStatusCode() == 404) {
+                LOGGER.log(Level.FINE, "test token endpoint", hre);
+                return false;
+            }
+        } catch (Throwable t) {
+            LOGGER.log(Level.FINE, "test token endpoint", t);
+            return false;
+        }
+        try {
+            HttpRequestFactory requestFactory = transport
+                    .createRequestFactory(new HttpRequestInitializer() {
+                        public void initialize(HttpRequest request)
+                                throws IOException {
+                            credential.initialize(request);
+                            request.setParser(new JsonObjectParser(JSON_FACTORY));
+                        }
+                    });
+            GenericUrl url = new GenericUrl(provider.authorization_endpoint);
+            HttpRequest request = requestFactory.buildGetRequest(url);
+            request.execute().getStatusCode();
+        } catch (com.google.api.client.http.HttpResponseException hre) {
+            if (hre.getStatusCode() == 404) {
+                LOGGER.log(Level.FINE, "test auth endpoint", hre);
+                return false;
+            }
+        } catch (Throwable t) {
+            LOGGER.log(Level.FINE, "test auth endpoint", t);
+            return false;
+        }
+        return true;
     }
 
     private OpenShiftUserInfo getOpenShiftUserInfo(final Credential credential,
@@ -802,10 +855,22 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         // of the master is not accessible from within the cluster); so we only
         // use the configured server prefix, where if not explicitly configured
         // we go with the internally accessible default
-        final GenericUrl tokenServerURL = new GenericUrl(
+        GenericUrl tsu = new GenericUrl(
                 getDefaultedServerPrefix() + "/oauth/token");
-        final String authorizationServerURL = getDefaultedRedirectURL()
+        String asu = getDefaultedRedirectURL()
                 + "/oauth/authorize";
+        final Credential credential = new Credential(
+                BearerToken.authorizationHeaderAccessMethod())
+                .setAccessToken(getDefaultedClientSecret().getPlainText());
+        if (useProviderOAuthEndpoint(credential, transport)) {
+            LOGGER.info("Using OAuth Provider specified endpoints for this login flow");
+            tsu = new GenericUrl(provider.token_endpoint);
+            asu = provider.authorization_endpoint;
+        } else {
+            LOGGER.info("Using the OpenShift Jenkins Login Plugin default for the OAuth endpoints");
+        }
+        final GenericUrl tokenServerURL = tsu;
+        final String authorizationServerURL = asu;
 
         final AuthorizationCodeFlow flow = new AuthorizationCodeFlow.Builder(
                 BearerToken.queryParameterAccessMethod(), transport,
