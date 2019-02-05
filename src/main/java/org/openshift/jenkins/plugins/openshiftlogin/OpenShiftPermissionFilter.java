@@ -25,6 +25,8 @@
 package org.openshift.jenkins.plugins.openshiftlogin;
 
 import hudson.EnvVars;
+import hudson.model.User;
+import hudson.security.SecurityRealm;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -42,6 +44,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
+import org.acegisecurity.GrantedAuthority;
 import org.acegisecurity.context.SecurityContextHolder;
 import org.acegisecurity.providers.UsernamePasswordAuthenticationToken;
 
@@ -50,6 +53,7 @@ import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.http.HttpResponseException;
 
 import jenkins.model.Jenkins;
+import jenkins.security.SecurityListener;
 
 /**
  * This servlet spec filter implementation serves as the hook point to
@@ -221,6 +225,7 @@ public class OpenShiftPermissionFilter implements Filter {
                                 } else if (entry.token != null) {
                                     SecurityContextHolder.getContext()
                                             .setAuthentication(entry.token);
+                                    SecurityListener.fireAuthenticated(new OpenShiftUserDetails(entry.token.getName(), new GrantedAuthority[] { SecurityRealm.AUTHENTICATED_AUTHORITY }));
                                 } else {
                                     HttpServletResponse httpResponse = (HttpServletResponse) response;
                                     httpResponse.sendError(401, NEED_TO_AUTH);
