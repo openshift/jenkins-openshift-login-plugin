@@ -101,6 +101,7 @@ import hudson.util.FormValidation;
 import hudson.util.HttpResponses;
 import hudson.util.Secret;
 import jenkins.model.Jenkins;
+import jenkins.security.SecurityListener;
 
 /**
  * Login with OpenShift using OpenID Connect / OAuth 2
@@ -893,6 +894,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             // suffix
             u.setFullName(info.getName());
             u.save();
+            SecurityListener.fireAuthenticated(new OpenShiftUserDetails(token.getName(), authorities));
 
             // So if you look at GlobalSecurityConfiguration and
             // GlobalMatrixAuthorizationStrategy (including its DescriptorImpl)
