@@ -1,5 +1,6 @@
 # openshift-login
 
+Test new prow based ci test jobs 
 
 A Jenkins plugin which lets you login to Jenkins with your account on an OpenShift installation.  
 
