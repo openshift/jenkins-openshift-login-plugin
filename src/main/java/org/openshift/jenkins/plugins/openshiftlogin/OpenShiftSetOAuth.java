@@ -44,11 +44,12 @@ public class OpenShiftSetOAuth {
     static int lastLog = 0;
 
     static boolean setOauth() {
-        return setOauth(true);
+        return true;
+        //return setOauth(true);
     }
 
     static boolean setOauth(boolean force) {
-        final Jenkins jenkins = Jenkins.getInstance();
+        /*final Jenkins jenkins = Jenkins.getInstance();
         String enabled = EnvVars.masterEnvVars.get(OPENSHIFT_ENABLE_OAUTH);
         // we override the security realm with openshift oauth if running in an
         // openshift pod
@@ -113,7 +114,7 @@ public class OpenShiftSetOAuth {
                 OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm)priorSecurityRealm;
                 secRealm.createFilter();
             }
-        }
-        return false;
+        }*/
+        return true;
     }
 }
