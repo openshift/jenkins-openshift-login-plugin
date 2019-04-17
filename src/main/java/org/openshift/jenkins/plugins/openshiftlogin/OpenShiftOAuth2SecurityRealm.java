@@ -61,6 +61,7 @@ import org.kohsuke.stapler.Header;
 import org.kohsuke.stapler.HttpRedirect;
 import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.Stapler;
 import org.kohsuke.stapler.StaplerRequest;
 
 import com.cloudbees.plugins.credentials.CredentialsProvider;
@@ -101,6 +102,7 @@ import hudson.util.FormValidation;
 import hudson.util.HttpResponses;
 import hudson.util.Secret;
 import jenkins.model.Jenkins;
+import jenkins.model.JenkinsLocationConfiguration;
 import jenkins.security.SecurityListener;
 
 /**
@@ -1113,8 +1115,19 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             if (url != null
                     && (url.getProtocol().equalsIgnoreCase("http") || url
                             .getProtocol().equalsIgnoreCase("https"))) {
+                // Get the current request to check if Jenkins was launched with
+                // a prefix set and append it after the URL Host.
+                final String prefix;
+                StaplerRequest req = Stapler.getCurrentRequest();
+
+                if (req != null) {
+                    prefix = req.getContextPath();
+                } else {
+                    prefix = "";
+                }
+
                 return url.getProtocol() + "://" + url.getHost()
-                        + "/securityRealm/finishLogin";
+                        + prefix + "/securityRealm/finishLogin";
             }
         } catch (MalformedURLException e) {
             throw e;
