@@ -102,7 +102,6 @@ import hudson.util.FormValidation;
 import hudson.util.HttpResponses;
 import hudson.util.Secret;
 import jenkins.model.Jenkins;
-import jenkins.model.JenkinsLocationConfiguration;
 import jenkins.security.SecurityListener;
 
 /**
