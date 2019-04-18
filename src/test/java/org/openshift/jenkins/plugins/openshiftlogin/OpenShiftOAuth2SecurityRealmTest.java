@@ -37,6 +37,7 @@ import static org.junit.Assert.fail;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Random;
 
@@ -177,6 +178,24 @@ public class OpenShiftOAuth2SecurityRealmTest {
 		assertThat(realm.populateDefaults(), is(false));
 		assertThat(realm.getDefaultedServerPrefix(), is(OpenShiftOAuth2SecurityRealm.DEFAULT_SVR_PREFIX));
 		assertThat(realm.getDefaultedServiceAccountDirectory(), is(OpenShiftOAuth2SecurityRealm.DEFAULT_SVC_ACCT_DIR));
+	}
+
+	@Test
+	public void testBuildOAuthRedirectUrl_withoutPrefix() throws Exception {
+                final OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, openshiftServer, clientID, clientSecret, openshiftServer);
+                // Create a new OAuthSession with a redirectUrl with a long path
+                OAuthSession session = realm.newOAuthSession("from", "https://example.com/jenkins/extra/path");
+
+                // Find private 'redirectUrl' field using Java Reflection and assert it doesn't include
+                // the '/jenkins/extra/path' portion of the redirectUrl passed above. 
+                Class<?> sessionClass = session.getClass();
+                Field fields[] = sessionClass.getDeclaredFields();
+                for (Field field : fields) {
+                    if (field.getName().equals("redirectUrl")) {
+                        field.setAccessible(true);
+                        assertThat(field.get(session).toString(), is("https://example.com/securityRealm/finishLogin"));
+                    } 
+                }
 	}
 /*
 	@Test
