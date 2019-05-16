@@ -168,6 +168,14 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
      * Will get repopulated on restart
      */
     private static HttpTransport transport;
+    
+    /**
+     * transport that will only leverage the JVMs default keystore and allow for the jenkins SA cert
+     * and the oauth server router cert varying such that SSL handshakes will fail if we exclusively
+     * use the jenkins SA cert
+     * 
+     */
+    private static HttpTransport jvmDefaultKeystoreTransport;
 
     /**
      * The service account directory, if set, instructs the plugin to follow the
@@ -282,6 +290,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         this.serviceAccountName = Util.fixEmpty(serviceAccountName);
 
         OpenShiftOAuth2SecurityRealm.transport = transport;
+        
+        jvmDefaultKeystoreTransport = 
+                new NetHttpTransport.Builder().build();
 
         if (testTransport != null)
             OpenShiftOAuth2SecurityRealm.transport = testTransport;
@@ -396,7 +407,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                 // for diagnostics: see if the provider endpoints are accessible, given what
                 // Mo told me about them moving the oauth server from internal to a route based external one
                 // on the fly
-                this.useProviderOAuthEndpoint(credential, transport);
+                if (this.useProviderOAuthEndpoint(credential))
+                    this.transportToUse(credential);
             } else {
                 runningInOpenShiftPodWithRequiredOAuthFeatures = false;
             }
@@ -540,10 +552,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         return info;
     }
     
-    private boolean useProviderOAuthEndpoint(
-            final Credential credential, final HttpTransport transport) {
+    private HttpTransport transportToUse(final Credential credential) {
         if (provider == null)
-            return false;
+            return transport;
         try {
             HttpRequestFactory requestFactory = transport
                     .createRequestFactory(new HttpRequestInitializer() {
@@ -554,18 +565,47 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                         }
                     });
             GenericUrl url = new GenericUrl(provider.token_endpoint);
-            HttpRequest request = requestFactory.buildGetRequest(url);
+            HttpRequest request = requestFactory.buildHeadRequest(url);
             request.execute().getStatusCode();
         } catch (com.google.api.client.http.HttpResponseException hre) {
             if (hre.getStatusCode() == 404) {
-                LOGGER.log(Level.FINE, "test token endpoint", hre);
-                return false;
+                LOGGER.log(Level.INFO, "OpenShift OAuth got an unexpected 404 trying out the issuer's token endpoint", hre);
+            }
+        } catch (javax.net.ssl.SSLHandshakeException ssle) {
+            LOGGER.info("OpenShift OAuth got a SSL error when accessing the issuer's token endpoint when using the SA certificate");
+            try {
+                HttpRequestFactory requestFactory = jvmDefaultKeystoreTransport
+                        .createRequestFactory(new HttpRequestInitializer() {
+                            public void initialize(HttpRequest request)
+                                    throws IOException {
+                                credential.initialize(request);
+                                request.setParser(new JsonObjectParser(JSON_FACTORY));
+                            }
+                        });
+                GenericUrl url = new GenericUrl(provider.token_endpoint);
+                HttpRequest request = requestFactory.buildHeadRequest(url);
+                request.execute().getStatusCode();
+                // most likely will not get here on vanilla head request but just in case 
+                LOGGER.info("OpenShift OAuth was able to complete the SSL handshake when accessing the issuer's token endpoint using the JVMs default keystore");
+            } catch (com.google.api.client.http.HttpResponseException hre) {
+                // this means SSL handshakes work, but our generic head simply is not honored by the endpoint
+                LOGGER.info("OpenShift OAuth was able to complete the SSL handshake when accessing the issuer's token endpoint using the JVMs default keystore");
+                return jvmDefaultKeystoreTransport;
+            } catch (Throwable t) {
+                LOGGER.log(Level.INFO, "OpenShift OAuth provider token endpoint failed unexpectedly using the JVMs default keystore", t);
+                return jvmDefaultKeystoreTransport;
             }
         } catch (Throwable t) {
-            LOGGER.log(Level.FINE, "test token endpoint", t);
-            return false;
+            LOGGER.log(Level.INFO, "OpenShift OAuth provider token endpoint failed unexpectedly using this pod's SA's certificate", t);
         }
+        return transport;
+    }
+    
+    private boolean useProviderOAuthEndpoint(final Credential credential) {
+        if (provider == null)
+            return false;
         try {
+            GenericUrl url = new GenericUrl(defaultedServerPrefix + "/version");
             HttpRequestFactory requestFactory = transport
                     .createRequestFactory(new HttpRequestInitializer() {
                         public void initialize(HttpRequest request)
@@ -574,19 +614,41 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                             request.setParser(new JsonObjectParser(JSON_FACTORY));
                         }
                     });
-            GenericUrl url = new GenericUrl(provider.authorization_endpoint);
             HttpRequest request = requestFactory.buildGetRequest(url);
-            request.execute().getStatusCode();
-        } catch (com.google.api.client.http.HttpResponseException hre) {
-            if (hre.getStatusCode() == 404) {
-                LOGGER.log(Level.FINE, "test auth endpoint", hre);
+            com.google.api.client.http.HttpResponse response = request.execute();
+            int rc = response.getStatusCode();
+            if (rc != 200)
+                LOGGER.info("OpenShift OAuth the attempt to get the server version request got an unexpected return code: " + rc);
+            OpenShiftVersionInfo version = response.parseAs(OpenShiftVersionInfo.class);
+            if (version != null && version.major != null && version.major.equals("1")) {
+                if (version.minor.length() > 2) {
+                    String minor = version.minor.substring(0, 2); // per javadoc end index is not inclusive
+                    int m = Integer.parseInt(minor);
+                    if (m <= 11) {
+                        // 3.x cluster
+                        LOGGER.info("OpenShift OAuth the server is 3.x, specifically " + version.toString());
+                        return false;
+                    } else {
+                        // 4.x cluster
+                        LOGGER.info("OpenShift OAuth server is 4.x, specifically " + version.toString());
+                        return true;
+                    }
+                    
+                } else {
+                    // 3.x cluster
+                    LOGGER.info("OpenShift OAuth the server is 3.x, specifically " + version.toString());
+                    return false;
+                }
+            } else {
+                // 3.x cluster
+                LOGGER.info("OpenShift OAuth server is 3.x, specifically " + version.toString());
                 return false;
             }
         } catch (Throwable t) {
-            LOGGER.log(Level.FINE, "test auth endpoint", t);
-            return false;
+            LOGGER.log(Level.INFO, "get version attempt failed", t);
         }
-        return true;
+        // default to old, traditional 3.x behavior
+        return false;
     }
 
     private OpenShiftUserInfo getOpenShiftUserInfo(final Credential credential,
@@ -855,6 +917,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         // of the master is not accessible from within the cluster); so we only
         // use the configured server prefix, where if not explicitly configured
         // we go with the internally accessible default
+        HttpTransport transportForThisRequest = transport;
         GenericUrl tsu = new GenericUrl(
                 getDefaultedServerPrefix() + "/oauth/token");
         String asu = getDefaultedRedirectURL()
@@ -862,18 +925,19 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         final Credential credential = new Credential(
                 BearerToken.authorizationHeaderAccessMethod())
                 .setAccessToken(getDefaultedClientSecret().getPlainText());
-        if (useProviderOAuthEndpoint(credential, transport)) {
-            LOGGER.info("Using OAuth Provider specified endpoints for this login flow");
+        if (useProviderOAuthEndpoint(credential)) {
+            LOGGER.info("OpenShift OAuth using OAuth Provider specified endpoints for this login flow");
             tsu = new GenericUrl(provider.token_endpoint);
             asu = provider.authorization_endpoint;
+            transportForThisRequest = transportToUse(credential);
         } else {
-            LOGGER.info("Using the OpenShift Jenkins Login Plugin default for the OAuth endpoints");
+            LOGGER.info("OpenShift OAuth using the OpenShift Jenkins Login Plugin default for the OAuth endpoints");
         }
         final GenericUrl tokenServerURL = tsu;
         final String authorizationServerURL = asu;
 
         final AuthorizationCodeFlow flow = new AuthorizationCodeFlow.Builder(
-                BearerToken.queryParameterAccessMethod(), transport,
+                BearerToken.queryParameterAccessMethod(), transportForThisRequest,
                 JSON_FACTORY, tokenServerURL,
                 new ClientParametersAuthentication(getDefaultedClientId(),
                         getDefaultedClientSecret().getPlainText()),
