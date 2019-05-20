@@ -8,7 +8,7 @@
 
   <groupId>org.openshift.jenkins</groupId>
   <artifactId>openshift-login</artifactId>
-  <version>1.0.17-SNAPSHOT</version>
+  <version>1.0.18-SNAPSHOT</version>
   <packaging>hpi</packaging>
 
   <scm>
