@@ -29,6 +29,8 @@ import static java.net.HttpURLConnection.HTTP_OK;
 import static java.util.logging.Level.FINE;
 import static java.util.logging.Level.INFO;
 import static java.util.logging.Level.SEVERE;
+import static java.util.logging.Level.WARNING;
+import static org.apache.commons.lang.StringUtils.isNotEmpty;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -41,6 +43,9 @@ import java.net.URL;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -82,8 +87,10 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.SecurityUtils;
 
 import hudson.EnvVars;
+import hudson.Extension;
 import hudson.Util;
 import hudson.model.Computer;
+import hudson.model.Descriptor;
 import hudson.model.Hudson;
 import hudson.model.Item;
 import hudson.model.Run;
@@ -95,6 +102,7 @@ import hudson.security.Permission;
 import hudson.security.PermissionGroup;
 import hudson.security.ProjectMatrixAuthorizationStrategy;
 import hudson.security.SecurityRealm;
+import hudson.util.FormValidation;
 import hudson.util.Secret;
 import jenkins.model.Jenkins;
 import jenkins.security.SecurityListener;
@@ -106,11 +114,13 @@ import jenkins.security.SecurityListener;
 public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     static final Logger LOGGER = Logger.getLogger(OpenShiftOAuth2SecurityRealm.class.getName());
 
+    private static final int SA_FIELDS_COUNT = 4;
+    private static final int SA_NAME_INDEX = 3;
     private static final String SCHEME_SEPARATOR = "://";
     private static final String HTTPS_SCHEME = "https";
     private static final String HTTP_SCHEME = "http";
     private static final String SECURITY_REALM_FINISH_LOGIN = "/securityRealm/finishLogin";
-    private static final String SERVICEACCOUNT_SEPARATOR = ":";
+    private static final String SA_SEPARATOR = ":";
     private static final String SERVICEACCOUNT_PREFIX = "system:serviceaccount:";
     // TODO Determine if they need to be private of package visibility is required
     static final String DEFAULT_SVC_ACCT_DIR = "/run/secrets/kubernetes.io/serviceaccount";
@@ -142,7 +152,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
      * NPE issues of this not getting set through based on how this object was
      * constructed
      */
-    private static final ArrayList<String> roles = new ArrayList<String>(Arrays.asList("admin", "edit", "view"));
+    private static final ArrayList<String> ROLES = new ArrayList<String>(Arrays.asList("admin", "edit", "view"));
 
     // static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
     private static final Object USER_UPDATE_LOCK = new Object();
@@ -257,22 +267,14 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     @DataBoundConstructor
     public OpenShiftOAuth2SecurityRealm(String serviceAccountDirectory, String serviceAccountName, String serverPrefix,
             String clientId, String clientSecret, String redirectURL) throws IOException, GeneralSecurityException {
-        // TODO @akram: Remove this once we see it is useless
-        // HttpTransport transport = HTTP_TRANSPORT;
 
-        if (LOGGER.isLoggable(FINE)) {
-            LOGGER.fine(String.format(
-                    "ctor: incoming args sa dir %s sa name %s svr prefix %s client id %s client secret %s redirectURL %s",
-                    serviceAccountDirectory, serviceAccountName, serverPrefix, clientId, clientSecret, redirectURL));
-        }
+        String format = "Constructor: incoming args sa dir %s sa name %s svr prefix %s client id %s client secret %s redirectURL %s";
+        LOGGER.fine(String.format(format, serviceAccountDirectory, serviceAccountName, serverPrefix, clientId,
+                clientSecret, redirectURL));
+
         String fixedServiceAccountDirectory = Util.fixEmpty(serviceAccountDirectory);
         this.clientId = Util.fixEmpty(clientId);
-        if (Util.fixEmpty(clientSecret) != null) {
-            this.clientSecret = Secret.fromString(clientSecret);
-        } else {
-            this.clientSecret = null;
-        }
-
+        this.clientSecret = (Util.fixEmpty(clientSecret) != null) ? Secret.fromString(clientSecret) : null;
         this.defaultedServerPrefix = DEFAULT_SVR_PREFIX;
         this.serverPrefix = Util.fixEmpty(serverPrefix);
         this.redirectURL = Util.fixEmpty(redirectURL);
@@ -281,16 +283,16 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         this.serviceAccountName = Util.fixEmpty(serviceAccountName);
         this.transport = new NetHttpTransport();
         this.jvmDefaultKeystoreTransport = new NetHttpTransport.Builder().build();
+
         if (testTransport != null) {
             this.transport = testTransport;
         } else {
             populateDefaults();
         }
 
-        if (LOGGER.isLoggable(FINE)) {
-            LOGGER.fine(String.format("ctor: derived default client id %s client secret %s sa dir %s transport %s",
-                    defaultedClientId, defaultedClientSecret, defaultedServiceAccountDirectory, transport));
-        }
+        String messageFormat = "Constructor: derived default client id %s client secret %s sa dir %s transport %s";
+        LOGGER.fine(String.format(messageFormat, defaultedClientId, defaultedClientSecret,
+                defaultedServiceAccountDirectory, transport));
     }
 
     /*
@@ -308,84 +310,71 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         // jenkins restarts, but the addFilter call needs to be made on each
         // restart, so we check flag to see if the filter
         // has been ran through at least once
-        if (filter == null || !filter.initCalled) {
+        if (this.filter == null || !this.filter.initCalled) {
+            LOGGER.log(FINE, "Filter is null or its init method has not been called yet: Re-adding the filter");
             try {
-                filter = new OpenShiftPermissionFilter();
-                hudson.util.PluginServletFilter.addFilter(filter);
+                this.filter = new OpenShiftPermissionFilter();
+                hudson.util.PluginServletFilter.addFilter(this.filter);
             } catch (ServletException e) {
                 LOGGER.log(SEVERE, "createFilter", e);
             }
+            LOGGER.log(FINE, "Filter initialized and added to PluginServletFilter filters");
         }
+        LOGGER.log(FINE, "Filter check completed");
+
     }
 
-    boolean populateDefaults() throws IOException, GeneralSecurityException {
-        createFilter();
+    boolean isRunningInPod() throws IOException, GeneralSecurityException {
+        LOGGER.log(FINE, "Entering isRunningInPod");
         boolean runningInPodWithRequiredOAuthFeatures = EnvVars.masterEnvVars.get(K8S_HOST_ENV_VAR) != null
                 && EnvVars.masterEnvVars.get(K8S_PORT_ENV_VAR) != null;
         // we want to be verbose wrt error logging if we are at least running
         // within a pod ... but if we know we are outside a pod, only
         // log if trace enabled
-        boolean withinAPod = runningInPodWithRequiredOAuthFeatures
-                || (new File(getDefaultedServiceAccountDirectory())).exists();
+        String serviceAccountDir = getDefaultedServiceAccountDirectory();
+        boolean withinAPod = runningInPodWithRequiredOAuthFeatures || (new File(serviceAccountDir)).exists();
 
-        FileInputStream fis = null;
         BufferedReader br = null;
         try {
-            br = new BufferedReader(new FileReader(new File(getDefaultedServiceAccountDirectory(), NAMESPACE)));
-            namespace = br.readLine();
-            runningInPodWithRequiredOAuthFeatures = runningInPodWithRequiredOAuthFeatures
-                    && (namespace != null ? namespace.length() > 0 : false);
-            br = new BufferedReader(new FileReader(new File(getDefaultedServiceAccountDirectory(), TOKEN)));
+            br = new BufferedReader(new FileReader(new File(serviceAccountDir, NAMESPACE)));
+            LOGGER.log(FINE, "Trying to read the namespace from " + serviceAccountDir + "/" + NAMESPACE);
+            this.namespace = br.readLine();
+            runningInPodWithRequiredOAuthFeatures = runningInPodWithRequiredOAuthFeatures && isNotEmpty(namespace);
+
+            LOGGER.log(FINE, "Trying to read the token from " + serviceAccountDir + "/" + TOKEN);
+            br = new BufferedReader(new FileReader(new File(serviceAccountDir, TOKEN)));
             defaultedClientSecret = br.readLine();
+            LOGGER.log(FINE, "Token read for its location");
+
             runningInPodWithRequiredOAuthFeatures = runningInPodWithRequiredOAuthFeatures
-                    && (defaultedClientSecret != null ? defaultedClientSecret.length() > 0 : false);
-            fis = new FileInputStream(new File(getDefaultedServiceAccountDirectory(), CA_CRT));
-            KeyStore keyStore = SecurityUtils.getDefaultKeyStore();
-            try {
-                keyStore.size();
-            } catch (KeyStoreException e) {
-                keyStore.load(null);
-            }
-            SecurityUtils.loadKeyStoreFromCertificates(keyStore, SecurityUtils.getX509CertificateFactory(), fis);
-            transport = new NetHttpTransport.Builder().trustCertificates(keyStore).build();
+                    && isNotEmpty(defaultedClientSecret);
         } catch (FileNotFoundException e) {
             runningInPodWithRequiredOAuthFeatures = false;
             if (LOGGER.isLoggable(FINE) || withinAPod)
                 LOGGER.log(FINE, "populatateDefaults", e);
         } finally {
-            if (fis != null)
-                fis.close();
             if (br != null)
                 br.close();
         }
 
-        final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
-                .setAccessToken(getDefaultedClientSecret().getPlainText());
+        String plainText = getDefaultedClientSecret().getPlainText();
+        AccessMethod authorizationHeaderAccessMethod = BearerToken.authorizationHeaderAccessMethod();
+        final Credential credential = new Credential(authorizationHeaderAccessMethod).setAccessToken(plainText);
         try {
-            OpenShiftUserInfo user = getOpenShiftUserInfo(credential, transport);
-            String[] userNameParts = user.getName().split(SERVICEACCOUNT_SEPARATOR);
+            OpenShiftUserInfo user = getOpenShiftUserInfo(credential, this.transport);
+            String[] userNameParts = user.getName().split(SA_SEPARATOR);
             if (userNameParts != null && userNameParts.length == 4) {
                 defaultedServiceAccountName = userNameParts[3];
             }
             runningInPodWithRequiredOAuthFeatures = runningInPodWithRequiredOAuthFeatures
                     && (defaultedServiceAccountName != null ? defaultedServiceAccountName.length() > 0 : false);
-            defaultedClientId = SERVICEACCOUNT_PREFIX + namespace + SERVICEACCOUNT_SEPARATOR
-                    + getDefaultedServiceAccountName();
+            defaultedClientId = SERVICEACCOUNT_PREFIX + namespace + SA_SEPARATOR + getDefaultedServiceAccountName();
 
-            provider = getOpenShiftOAuthProvider(credential, transport);
+            this.provider = getOpenShiftOAuthProvider(credential, transport);
             if (withinAPod) {
                 LOGGER.info(String.format("OpenShift OAuth: provider: %s", provider));
             }
-            if (provider != null) {
-                // the issuer is the public address of the k8s svc; use this vs. the hostname or
-                // ip/port that is only available within the cluster
-                this.defaultedRedirectURL = provider.issuer;
-                // for diagnostics: see if the provider endpoints are accessible, given what
-                // Mo told me about them moving the oauth server from internal to a route based
-                // external one on the fly
-                if (this.useProviderOAuthEndpoint(credential))
-                    this.transportToUse(credential);
-            } else {
+            if (provider == null) {
                 runningInPodWithRequiredOAuthFeatures = false;
             }
         } catch (Throwable t) {
@@ -424,6 +413,94 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         }
 
         return runningInPodWithRequiredOAuthFeatures;
+    }
+
+    void populateDefaults() throws IOException, GeneralSecurityException {
+        LOGGER.log(FINE, "Entering populateDefaults");
+        createFilter();
+        LOGGER.log(FINE, "Filter creation has been performed");
+        // we want to be verbose wrt error logging if we are at least running
+        // within a pod ... but if we know we are outside a pod, only
+        // log if trace enabled
+        String serviceAccountDirectory = getDefaultedServiceAccountDirectory();
+        KeyStore keyStore = extractKeyStore(serviceAccountDirectory);
+        this.transport = new NetHttpTransport.Builder().trustCertificates(keyStore).build();
+        LOGGER.log(INFO, "populateDefaults: transport Initialized with keystore " + keyStore);
+
+        String plainText = getDefaultedClientSecret().getPlainText();
+        AccessMethod authorizationHeaderAccessMethod = BearerToken.authorizationHeaderAccessMethod();
+        final Credential credential = new Credential(authorizationHeaderAccessMethod).setAccessToken(plainText);
+        try {
+            OpenShiftUserInfo user = getOpenShiftUserInfo(credential, transport);
+            String[] userNameParts = user.getName().split(SA_SEPARATOR);
+            if (userNameParts != null && userNameParts.length == SA_FIELDS_COUNT) {
+                this.defaultedServiceAccountName = userNameParts[SA_NAME_INDEX];
+            }
+            this.provider = getOpenShiftOAuthProvider(credential, transport);
+            LOGGER.info(String.format("OpenShift OAuth: provider: %s", provider));
+            if (provider != null) {
+                // the issuer is the public address of the k8s svc; use this vs. the hostname or
+                // ip/port that is only available within the cluster
+                this.defaultedRedirectURL = provider.issuer;
+                // for diagnostics: see if the provider endpoints are accessible, given what
+                // Mo told me about them moving the oauth server from internal to a route based
+                // external one on the fly
+                if (useProviderOAuthEndpoint(credential, this.defaultedServerPrefix, this.transport, this.provider)) {
+                    transportToUse(credential);
+                }
+            }
+        } catch (Throwable t) {
+            LOGGER.log(SEVERE, "populateDefaults", t);
+            String message = "Error while trying to populate default transports: This probably "
+                    + "means that the connection to Oauth server failed because of an invalid CA. "
+                    + "Check that the serviceaccount ca.crt file  can validate the oauth server "
+                    + "certificate, or that the default Java keystore contains a CA certificate that can do it.";
+            LOGGER.log(SEVERE, message, t);
+        }
+    }
+
+    private KeyStore extractKeyStore(String parent) throws IOException, KeyStoreException, NoSuchAlgorithmException,
+            CertificateException, GeneralSecurityException {
+        FileInputStream fis = null;
+        BufferedReader br = null;
+        KeyStore keyStore = null;
+        try {
+            br = new BufferedReader(new FileReader(new File(parent, NAMESPACE)));
+            LOGGER.log(FINE, "Trying to read the namespace from " + parent + "/" + NAMESPACE);
+            this.namespace = br.readLine();
+
+            LOGGER.log(FINE, "Trying to read the token from " + parent + "/" + TOKEN);
+            LOGGER.log(FINE, "Token succesfully read from its location");
+
+            LOGGER.log(FINE, "Trying to read the CA certificate from " + parent + "/" + CA_CRT);
+            fis = new FileInputStream(new File(parent, CA_CRT));
+            LOGGER.log(FINE, "CA certificate file is readable");
+
+            LOGGER.log(FINE, "Trying to get default java Keystore");
+            keyStore = SecurityUtils.getDefaultKeyStore();
+            LOGGER.log(FINE, "A non null default keystore has been loaded....checking if it has been initialized...");
+            try {
+                keyStore.size();
+                LOGGER.log(FINE, "The default keystore was properly initalized. ");
+            } catch (KeyStoreException e) {
+                LOGGER.log(FINE, "The default keystore was NOT properly initalized. ");
+                LOGGER.log(FINE, "Loading the system JVM keystore instead");
+                keyStore.load(null);
+            }
+            CertificateFactory x509CertificateFactory = SecurityUtils.getX509CertificateFactory();
+            LOGGER.log(FINE, "Loading keystore from the CA certificate which is an x509");
+            SecurityUtils.loadKeyStoreFromCertificates(keyStore, x509CertificateFactory, fis);
+
+        } catch (FileNotFoundException e) {
+            LOGGER.log(SEVERE, "populateDefaults: Cannot read certificate file or ca file: " + CA_CRT, e);
+            LOGGER.log(FINE, "populateDefaults: FileNotFound Exception", e);
+        } finally {
+            if (fis != null)
+                fis.close();
+            if (br != null)
+                br.close();
+        }
+        return keyStore;
     }
 
     /**
@@ -743,7 +820,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         AccessMethod authorizationHeaderAccessMethod = BearerToken.authorizationHeaderAccessMethod();
         String acessToken = getDefaultedClientSecret().getPlainText();
         final Credential credential = new Credential(authorizationHeaderAccessMethod).setAccessToken(acessToken);
-        if (useProviderOAuthEndpoint(credential)) {
+        if (useProviderOAuthEndpoint(credential, this.defaultedServerPrefix, transportForThisRequest, provider)) {
             LOGGER.info("OpenShift OAuth using OAuth Provider specified endpoints for this login flow");
             tokeServer = new GenericUrl(provider.token_endpoint);
             authorizationServer = provider.authorization_endpoint;
@@ -809,9 +886,12 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
 
     private HttpTransport transportToUse(final Credential credential) {
-        if (provider == null) {
+        LOGGER.log(INFO, "OAuth: Checking OpenShift Server Information : " + provider);
+        if (this.provider == null) {
+            LOGGER.log(INFO, "OAuth: OpenShift Information Provider is null. Using transport: " + transport);
             return transport;
         }
+        LOGGER.log(INFO, "OAuth: OpenShift Information Provider is not null. Now trying to determine transport to use");
         OpenShiftRequestInitializer initializer = new OpenShiftRequestInitializer(credential);
         try {
             HttpRequestFactory requestFactory = transport.createRequestFactory(initializer);
@@ -819,6 +899,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             HttpRequest request = requestFactory.buildHeadRequest(url);
             com.google.api.client.http.HttpResponse execute = request.execute();
             execute.getStatusCode();
+            LOGGER.log(INFO, "OAuth: Querying the openshift server with " + transport + " worked");
         } catch (com.google.api.client.http.HttpResponseException hre) {
             if (hre.getStatusCode() == HTTP_NOT_FOUND) {
                 LOGGER.log(INFO, "OpenShift OAuth got an unexpected 404 trying out the issuer's token endpoint", hre);
@@ -826,6 +907,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         } catch (SSLHandshakeException ssle) {
             String formattedMessage = "OpenShift OAuth got an SSL error when accessing the issuer's token endpoint when using the SA certificate";
             LOGGER.info(formattedMessage);
+            HttpRequest request = null;
             try {
                 if (this.jvmDefaultKeystoreTransport == null) {
                     LOGGER.log(INFO, "jvmDefaultKeystoreTransport was not initialized: Forcing initalization");
@@ -833,30 +915,42 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                 }
                 HttpRequestFactory requestFactory = jvmDefaultKeystoreTransport.createRequestFactory(initializer);
                 GenericUrl url = new GenericUrl(provider.token_endpoint);
-                HttpRequest request = requestFactory.buildHeadRequest(url);
+                request = requestFactory.buildHeadRequest(url);
                 request.execute().getStatusCode();
-                String message = "OpenShift OAuth was able to complete the SSL handshake when accessing the issuer's token endpoint using the JVMs default keystore";
+                String message = "OpenShift OAuth successully performed the SSL handshake when accessing the issuer's token endpoint using the  JVMs default keystore";
                 // most likely will not get here on vanilla head request but just in case
                 LOGGER.info(message);
             } catch (com.google.api.client.http.HttpResponseException hre) {
                 // this means SSL handshakes work, but our generic head simply is not honored by
                 // the endpoint
-                String message = "OpenShift OAuth was able to complete the SSL handshake when accessing the issuer's token endpoint using the JVMs default keystore";
-                LOGGER.info(message);
+                String message = "SSL handshake worked when accessing the issuer's URL, but querying "
+                        + "the oauth server threw an exception: " + hre + ", request: url:" + request.getUrl()
+                        + "method: " + request.getRequestMethod() + ",request: " + request;
+                LOGGER.log(WARNING, message);
                 return jvmDefaultKeystoreTransport;
             } catch (Throwable t) {
-                String message = "OpenShift OAuth provider token endpoint failed unexpectedly using the JVMs default keystore";
-                LOGGER.log(INFO, message, t);
+                String message = "OpenShift OAuth provider token endpoint failed unexpectedly using the JVMs default keystore:"
+                        + "Error while trying to populate default transports: This probably "
+                        + "means that the connection to Oauth server failed because of an invalid CA. "
+                        + "Check that the serviceaccount ca.crt file  can validate the oauth server "
+                        + "certificate, or that the default Java keystore contains a CA certificate that can do it.";
+                LOGGER.log(WARNING, message, t);
                 return jvmDefaultKeystoreTransport;
             }
         } catch (Throwable t) {
-            String message = "OpenShift OAuth provider token endpoint failed unexpectedly using this pod's SA's certificate";
-            LOGGER.log(INFO, message, t);
+            String message = "OpenShift OAuth provider token endpoint failed unexpectedly using this pod's SA's certificate:"
+                    + "Error while trying to populate default transports: This probably "
+                    + "means that the connection to Oauth server failed because of an invalid CA. "
+                    + "Check that the serviceaccount ca.crt file  can validate the oauth server "
+                    + "certificate, or that the default Java keystore contains a CA certificate that can do it.";
+            LOGGER.log(SEVERE, message, t);
         }
+        LOGGER.log(INFO, "Using transport to query OpenShift OAuth Server: " + transport);
         return transport;
     }
 
-    private boolean useProviderOAuthEndpoint(final Credential credential) {
+    private static boolean useProviderOAuthEndpoint(final Credential credential, final String defaultedServerPrefix,
+            final HttpTransport transport, OpenShiftProviderInfo provider) {
         if (provider == null) {
             return false;
         }
@@ -934,7 +1028,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + SAR_URI);
 
         ArrayList<String> allowedRoles = new ArrayList<String>();
-        for (String verb : roles) {
+        for (String verb : ROLES) {
             String json = buildSARJson(namespace, verb);
             if (json == null) {
                 LOGGER.info("DBG json null ... namespace " + namespace + " verb " + verb);
@@ -1001,13 +1095,13 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
         permMap.clear();
         mapPermissionIntoRole(permMap, response, prefix);
-        roles.clear();
+        ROLES.clear();
 
         for (String key : permMap.keySet()) {
-            if (!roles.contains(key))
-                roles.add(key);
+            if (!ROLES.contains(key))
+                ROLES.add(key);
         }
-        LOGGER.info(prefix + " using role list " + roles);
+        LOGGER.info(prefix + " using role list " + ROLES);
         return permMap;
     }
 
@@ -1090,6 +1184,49 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                 }
             }
         }
+    }
+
+    @Extension
+    public static class DescriptorImpl extends Descriptor<SecurityRealm> {
+        private static final String DISPLAY_NAME = "Login with OpenShift";
+
+        public String getDisplayName() {
+            return DISPLAY_NAME;
+        }
+
+        private FormValidation paramsWithPodDefaults(@QueryParameter String value) {
+            if (value == null || value.length() == 0)
+                return FormValidation.warning(
+                        "Unless you specify a value here, the assumption will be that Jenkins is running inside an OpenShift pod, where the value is available.");
+            return FormValidation.ok();
+        }
+
+        public FormValidation doCheckServiceAccountDirectory(@QueryParameter String value)
+                throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
+        }
+
+        public FormValidation doCheckClientId(@QueryParameter String value) throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
+        }
+
+        public FormValidation doCheckClientSecret(@QueryParameter String value) throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
+        }
+
+        public FormValidation doCheckServerPrefix(@QueryParameter String value) throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
+        }
+
+        public FormValidation doCheckRedirectURL(@QueryParameter String value) throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
+        }
+
+        public FormValidation doCheckServiceAccountName(@QueryParameter String value)
+                throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
+        }
+
     }
 
 }

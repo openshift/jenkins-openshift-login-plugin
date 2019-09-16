@@ -175,7 +175,7 @@ public class OpenShiftOAuth2SecurityRealmTest {
 	@Test
 	public void testPodDefaults() throws Exception {
 		final OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, openshiftServer, clientID, clientSecret, openshiftServer);
-		assertThat(realm.populateDefaults(), is(false));
+		assertThat(realm.isRunningInPod(), is(false));
 		assertThat(realm.getDefaultedServerPrefix(), is(OpenShiftOAuth2SecurityRealm.DEFAULT_SVR_PREFIX));
 		assertThat(realm.getDefaultedServiceAccountDirectory(), is(OpenShiftOAuth2SecurityRealm.DEFAULT_SVC_ACCT_DIR));
 	}

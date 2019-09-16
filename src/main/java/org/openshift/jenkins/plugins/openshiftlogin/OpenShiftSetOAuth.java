@@ -76,7 +76,7 @@ public class OpenShiftSetOAuth {
                                     null, null, null, null, null, null);
                             boolean inOpenShiftPod = false;
                             try {
-                                inOpenShiftPod = osrealm.populateDefaults();
+                                inOpenShiftPod = osrealm.isRunningInPod();
                             } catch (Throwable t) {
                                 if ((lastLog % 100) == 0) {
                                     LOGGER.log(Level.SEVERE, "OpenShiftSetOAuth", t);
