@@ -24,6 +24,10 @@
  */
 package org.openshift.jenkins.plugins.openshiftlogin;
 
+import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
+import static java.net.HttpURLConnection.HTTP_OK;
+import static java.util.logging.Level.INFO;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -46,6 +50,7 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.net.ssl.SSLHandshakeException;
 import javax.servlet.ServletException;
 
 import org.acegisecurity.Authentication;
@@ -85,17 +90,17 @@ import com.google.api.client.util.SecurityUtils;
 import hudson.EnvVars;
 import hudson.Extension;
 import hudson.Util;
-import hudson.model.Item;
 import hudson.model.Computer;
 import hudson.model.Descriptor;
 import hudson.model.Hudson;
+import hudson.model.Item;
 import hudson.model.Run;
 import hudson.model.User;
 import hudson.model.View;
 import hudson.scm.SCM;
+import hudson.security.GlobalMatrixAuthorizationStrategy;
 import hudson.security.Permission;
 import hudson.security.PermissionGroup;
-import hudson.security.GlobalMatrixAuthorizationStrategy;
 import hudson.security.ProjectMatrixAuthorizationStrategy;
 import hudson.security.SecurityRealm;
 import hudson.util.FormValidation;
@@ -109,8 +114,7 @@ import jenkins.security.SecurityListener;
  *
  */
 public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
-    static final Logger LOGGER = Logger
-            .getLogger(OpenShiftOAuth2SecurityRealm.class.getName());
+    static final Logger LOGGER = Logger.getLogger(OpenShiftOAuth2SecurityRealm.class.getName());
 
     /**
      * OAuth 2 scope. This is enough to call a variety of userinfo api's.
@@ -127,7 +131,6 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private static final String START_METHOD = "doCommenceLogin";
     private static final String DISPLAY_NAME = "Login with OpenShift";
     private static final String LOGIN_URL = "securityRealm/commenceLogin";
-
 
     private static final String USER_URI = "/apis/user.openshift.io/v1/users/~";
     private static final String SAR_URI = "/apis/authorization.openshift.io/v1/subjectaccessreviews";
@@ -150,9 +153,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
     private static final Object USER_UPDATE_LOCK = new Object();
 
-    // making this an instance variable lead to all sort of weird jenkins prompted 
-    // NPE issues of this not getting set through based on how this object was constructed 
-    private static final ArrayList<String> roles = new ArrayList<String>(Arrays.asList( "admin", "edit", "view" ));
+    // making this an instance variable lead to all sort of weird jenkins prompted
+    // NPE issues of this not getting set through based on how this object was
+    // constructed
+    private static final ArrayList<String> roles = new ArrayList<String>(Arrays.asList("admin", "edit", "view"));
 
     /**
      * Control the redirection URL for this realm. Exposed for testing.
@@ -164,30 +168,30 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     static HttpTransport testTransport;
 
     /**
-     * The transport loaded with a service account secret.
-     * Marked static for https://jenkins.io/blog/2018/03/15/jep-200-lts/#after-the-upgrade
-     * Will get repopulated on restart
+     * The transport loaded with a service account secret. Marked static for
+     * https://jenkins.io/blog/2018/03/15/jep-200-lts/#after-the-upgrade Will get
+     * repopulated on restart
      */
     private static HttpTransport transport;
-    
+
     /**
-     * transport that will only leverage the JVMs default keystore and allow for the jenkins SA cert
-     * and the oauth server router cert varying such that SSL handshakes will fail if we exclusively
-     * use the jenkins SA cert
+     * transport that will only leverage the JVMs default keystore and allow for the
+     * jenkins SA cert and the oauth server router cert varying such that SSL
+     * handshakes will fail if we exclusively use the jenkins SA cert
      * 
      */
     private static HttpTransport jvmDefaultKeystoreTransport;
 
     /**
      * The service account directory, if set, instructs the plugin to follow the
-     * Kubernetes service account conventions to locate the service account
-     * token (client secret) and namespace value (to build the service account).
+     * Kubernetes service account conventions to locate the service account token
+     * (client secret) and namespace value (to build the service account).
      */
     private final String serviceAccountDirectory;
 
     /**
-     * If the user did not specify a specific value for serviceAccountDirectory,
-     * the inferred default is stored here
+     * If the user did not specify a specific value for serviceAccountDirectory, the
+     * inferred default is stored here
      */
     private String defaultedServiceAccountDirectory;
 
@@ -209,8 +213,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private final String serverPrefix;
 
     /**
-     * If the user did not specify a specific value for serverPrefix, the
-     * inferred default is stored here
+     * If the user did not specify a specific value for serverPrefix, the inferred
+     * default is stored here
      */
     private String defaultedServerPrefix;
 
@@ -220,8 +224,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private final String redirectURL;
 
     /**
-     * If the user did not specify a specific value for redirectURL, the
-     * inferred default is stored here.
+     * If the user did not specify a specific value for redirectURL, the inferred
+     * default is stored here.
      */
     private String defaultedRedirectURL;
 
@@ -242,8 +246,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private final Secret clientSecret;
 
     /**
-     * If the user did not specify a specific value for defaultedClientSecret,
-     * the inferred default is stored here
+     * If the user did not specify a specific value for defaultedClientSecret, the
+     * inferred default is stored here
      */
     private String defaultedClientSecret;
 
@@ -260,20 +264,16 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private OpenShiftPermissionFilter filter;
 
     @DataBoundConstructor
-    public OpenShiftOAuth2SecurityRealm(String serviceAccountDirectory,
-            String serviceAccountName, String serverPrefix, String clientId,
-            String clientSecret, String redirectURL) throws IOException,
-            GeneralSecurityException {
+    public OpenShiftOAuth2SecurityRealm(String serviceAccountDirectory, String serviceAccountName, String serverPrefix,
+            String clientId, String clientSecret, String redirectURL) throws IOException, GeneralSecurityException {
         HttpTransport transport = HTTP_TRANSPORT;
 
         if (LOGGER.isLoggable(Level.FINE))
-            LOGGER.fine(String
-                    .format("ctor: incoming args sa dir %s sa name %s svr prefix %s client id %s client secret %s redirectURL %s",
-                            serviceAccountDirectory, serviceAccountName,
-                            serverPrefix, clientId, clientSecret, redirectURL));
+            LOGGER.fine(String.format(
+                    "ctor: incoming args sa dir %s sa name %s svr prefix %s client id %s client secret %s redirectURL %s",
+                    serviceAccountDirectory, serviceAccountName, serverPrefix, clientId, clientSecret, redirectURL));
 
-        String fixedServiceAccountDirectory = Util
-                .fixEmpty(serviceAccountDirectory);
+        String fixedServiceAccountDirectory = Util.fixEmpty(serviceAccountDirectory);
         this.clientId = Util.fixEmpty(clientId);
         if (Util.fixEmpty(clientSecret) != null)
             this.clientSecret = Secret.fromString(clientSecret);
@@ -291,29 +291,25 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         this.serviceAccountName = Util.fixEmpty(serviceAccountName);
 
         OpenShiftOAuth2SecurityRealm.transport = transport;
-        
-        jvmDefaultKeystoreTransport = 
-                new NetHttpTransport.Builder().build();
+
+        jvmDefaultKeystoreTransport = new NetHttpTransport.Builder().build();
 
         if (testTransport != null)
             OpenShiftOAuth2SecurityRealm.transport = testTransport;
         else
             populateDefaults();
-        
+
         if (LOGGER.isLoggable(Level.FINE))
-            LOGGER.fine(String
-                    .format("ctor: derived default client id %s client secret %s sa dir %s transport %s",
-                            defaultedClientId, defaultedClientSecret,
-                            defaultedServiceAccountDirectory, transport));
+            LOGGER.fine(String.format("ctor: derived default client id %s client secret %s sa dir %s transport %s",
+                    defaultedClientId, defaultedClientSecret, defaultedServiceAccountDirectory, transport));
     }
 
     /*
      * Note, a fair amount of investigation was done into leveraging the
      * hudson.security.SecurityRealm.createFilter(FilterConfig) extension point.
-     * However, quite a bit of tight coupling with assumed behavior in the
-     * jenkins core wrt the other security features and servlet filtering arose.
-     * Hence, we are sticking with the
-     * hudson.util.PluginServletFilter.addFilter(Filter) path.
+     * However, quite a bit of tight coupling with assumed behavior in the jenkins
+     * core wrt the other security features and servlet filtering arose. Hence, we
+     * are sticking with the hudson.util.PluginServletFilter.addFilter(Filter) path.
      */
     synchronized void createFilter() {
         // restarts on things like plugin upgrade bypassed the call to the
@@ -335,8 +331,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
     boolean populateDefaults() throws IOException, GeneralSecurityException {
         createFilter();
-        boolean runningInOpenShiftPodWithRequiredOAuthFeatures = EnvVars.masterEnvVars
-                .get(K8S_HOST_ENV_VAR) != null
+        boolean runningInOpenShiftPodWithRequiredOAuthFeatures = EnvVars.masterEnvVars.get(K8S_HOST_ENV_VAR) != null
                 && EnvVars.masterEnvVars.get(K8S_PORT_ENV_VAR) != null;
         // we want to be verbose wrt error logging if we are at least running
         // within a pod ... but if we know we are outside a pod, only
@@ -347,29 +342,23 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         FileInputStream fis = null;
         BufferedReader br = null;
         try {
-            br = new BufferedReader(new FileReader(new File(
-                    getDefaultedServiceAccountDirectory(), NAMESPACE)));
+            br = new BufferedReader(new FileReader(new File(getDefaultedServiceAccountDirectory(), NAMESPACE)));
             namespace = br.readLine();
             runningInOpenShiftPodWithRequiredOAuthFeatures = runningInOpenShiftPodWithRequiredOAuthFeatures
                     && (namespace != null ? namespace.length() > 0 : false);
-            br = new BufferedReader(new FileReader(new File(
-                    getDefaultedServiceAccountDirectory(), TOKEN)));
+            br = new BufferedReader(new FileReader(new File(getDefaultedServiceAccountDirectory(), TOKEN)));
             defaultedClientSecret = br.readLine();
             runningInOpenShiftPodWithRequiredOAuthFeatures = runningInOpenShiftPodWithRequiredOAuthFeatures
-                    && (defaultedClientSecret != null ? defaultedClientSecret
-                            .length() > 0 : false);
-            fis = new FileInputStream(new File(
-                    getDefaultedServiceAccountDirectory(), CA_CRT));
+                    && (defaultedClientSecret != null ? defaultedClientSecret.length() > 0 : false);
+            fis = new FileInputStream(new File(getDefaultedServiceAccountDirectory(), CA_CRT));
             KeyStore keyStore = SecurityUtils.getDefaultKeyStore();
             try {
                 keyStore.size();
             } catch (KeyStoreException e) {
                 keyStore.load(null);
             }
-            SecurityUtils.loadKeyStoreFromCertificates(keyStore,
-                    SecurityUtils.getX509CertificateFactory(), fis);
-            transport = new NetHttpTransport.Builder().trustCertificates(
-                    keyStore).build();
+            SecurityUtils.loadKeyStoreFromCertificates(keyStore, SecurityUtils.getX509CertificateFactory(), fis);
+            transport = new NetHttpTransport.Builder().trustCertificates(keyStore).build();
         } catch (FileNotFoundException e) {
             runningInOpenShiftPodWithRequiredOAuthFeatures = false;
             if (LOGGER.isLoggable(Level.FINE) || withinAPod)
@@ -381,8 +370,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                 br.close();
         }
 
-        final Credential credential = new Credential(
-                BearerToken.authorizationHeaderAccessMethod())
+        final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
                 .setAccessToken(getDefaultedClientSecret().getPlainText());
         try {
             OpenShiftUserInfo user = getOpenShiftUserInfo(credential, transport);
@@ -391,22 +379,20 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                 defaultedServiceAccountName = userNameParts[3];
             }
             runningInOpenShiftPodWithRequiredOAuthFeatures = runningInOpenShiftPodWithRequiredOAuthFeatures
-                    && (defaultedServiceAccountName != null ? defaultedServiceAccountName
-                            .length() > 0 : false);
-            defaultedClientId = "system:serviceaccount:" + namespace + ":"
-                    + getDefaultedServiceAccountName();
+                    && (defaultedServiceAccountName != null ? defaultedServiceAccountName.length() > 0 : false);
+            defaultedClientId = "system:serviceaccount:" + namespace + ":" + getDefaultedServiceAccountName();
 
             provider = getOpenShiftOAuthProvider(credential, transport);
             if (withinAPod)
-                LOGGER.info(String.format("OpenShift OAuth: provider: %s",
-                        provider));
+                LOGGER.info(String.format("OpenShift OAuth: provider: %s", provider));
             if (provider != null) {
                 // the issuer is the public address of the k8s svc; use this vs.
                 // the hostname or ip/port that is only available within the
                 // cluster
                 this.defaultedRedirectURL = provider.issuer;
                 // for diagnostics: see if the provider endpoints are accessible, given what
-                // Mo told me about them moving the oauth server from internal to a route based external one
+                // Mo told me about them moving the oauth server from internal to a route based
+                // external one
                 // on the fly
                 if (this.useProviderOAuthEndpoint(credential))
                     this.transportToUse(credential);
@@ -422,36 +408,31 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         }
 
         if (!runningInOpenShiftPodWithRequiredOAuthFeatures) {
-            boolean hasSAName = this.serviceAccountName != null
-                    || this.defaultedServiceAccountName != null;
-            boolean hasSecret = this.clientSecret != null
-                    || this.defaultedClientSecret != null;
-            boolean hasClientID = this.clientId != null
-                    || this.defaultedClientId != null;
-            boolean hasClientSecret = this.clientSecret != null
-                    || this.defaultedClientSecret != null;
-            boolean hasRedirectURL = this.redirectURL != null
-                    || this.defaultedRedirectURL != null;
+            boolean hasSAName = this.serviceAccountName != null || this.defaultedServiceAccountName != null;
+            boolean hasSecret = this.clientSecret != null || this.defaultedClientSecret != null;
+            boolean hasClientID = this.clientId != null || this.defaultedClientId != null;
+            boolean hasClientSecret = this.clientSecret != null || this.defaultedClientSecret != null;
+            boolean hasRedirectURL = this.redirectURL != null || this.defaultedRedirectURL != null;
             // namespace check is really the validation that the service account
             // directory is OK
-            if (this.namespace != null && hasSAName && hasSecret && hasClientID
-                    && hasClientSecret && hasRedirectURL)
+            if (this.namespace != null && hasSAName && hasSecret && hasClientID && hasClientSecret && hasRedirectURL)
                 runningInOpenShiftPodWithRequiredOAuthFeatures = true;
 
         }
 
         if (withinAPod)
-            LOGGER.info(String
-                    .format("OpenShift OAuth returning %s with namespace %s SA dir %s default %s SA name %s default %s client ID %s default %s secret %s default %s redirect %s default %s server %s default %s",
-                            runningInOpenShiftPodWithRequiredOAuthFeatures,
-                            this.namespace, this.serviceAccountDirectory,
-                            this.defaultedServiceAccountDirectory,
-                            this.serviceAccountName,
-                            this.defaultedServiceAccountName, this.clientId,
-                            this.defaultedClientId, (Secret.toString(this.clientSecret).length() > 6 ? Secret.toString(this.clientSecret).substring(0, 5) + "......." : "null"),
-                            (this.defaultedClientSecret != null && this.defaultedClientSecret.length() > 6 ? this.defaultedClientSecret.substring(0, 5) + "......." : "null"), this.redirectURL,
-                            this.defaultedRedirectURL, this.serverPrefix,
-                            this.defaultedServerPrefix));
+            LOGGER.info(String.format(
+                    "OpenShift OAuth returning %s with namespace %s SA dir %s default %s SA name %s default %s client ID %s default %s secret %s default %s redirect %s default %s server %s default %s",
+                    runningInOpenShiftPodWithRequiredOAuthFeatures, this.namespace, this.serviceAccountDirectory,
+                    this.defaultedServiceAccountDirectory, this.serviceAccountName, this.defaultedServiceAccountName,
+                    this.clientId, this.defaultedClientId,
+                    (Secret.toString(this.clientSecret).length() > 6
+                            ? Secret.toString(this.clientSecret).substring(0, 5) + "......."
+                            : "null"),
+                    (this.defaultedClientSecret != null && this.defaultedClientSecret.length() > 6
+                            ? this.defaultedClientSecret.substring(0, 5) + "......."
+                            : "null"),
+                    this.redirectURL, this.defaultedRedirectURL, this.serverPrefix, this.defaultedServerPrefix));
 
         return runningInOpenShiftPodWithRequiredOAuthFeatures;
     }
@@ -532,94 +513,100 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         return LOGIN_URL;
     }
 
-    private OpenShiftProviderInfo getOpenShiftOAuthProvider(
-            final Credential credential, final HttpTransport transport)
+    private OpenShiftProviderInfo getOpenShiftOAuthProvider(final Credential credential, final HttpTransport transport)
             throws IOException {
-        HttpRequestFactory requestFactory = transport
-                .createRequestFactory(new HttpRequestInitializer() {
-                    public void initialize(HttpRequest request)
-                            throws IOException {
-                        credential.initialize(request);
-                        request.setParser(new JsonObjectParser(JSON_FACTORY));
-                    }
-                });
-        GenericUrl url = new GenericUrl(getDefaultedServerPrefix()
-                + OAUTH_PROVIDER_URI);
+        HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
+            public void initialize(HttpRequest request) throws IOException {
+                credential.initialize(request);
+                request.setParser(new JsonObjectParser(JSON_FACTORY));
+            }
+        });
+        GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + OAUTH_PROVIDER_URI);
 
         HttpRequest request = requestFactory.buildGetRequest(url);
 
-        OpenShiftProviderInfo info = request.execute().parseAs(
-                OpenShiftProviderInfo.class);
+        OpenShiftProviderInfo info = request.execute().parseAs(OpenShiftProviderInfo.class);
         return info;
     }
-    
+
     private HttpTransport transportToUse(final Credential credential) {
         if (provider == null)
             return transport;
         try {
-            HttpRequestFactory requestFactory = transport
-                    .createRequestFactory(new HttpRequestInitializer() {
-                        public void initialize(HttpRequest request)
-                                throws IOException {
-                            credential.initialize(request);
-                            request.setParser(new JsonObjectParser(JSON_FACTORY));
-                        }
-                    });
+            HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
+                public void initialize(HttpRequest request) throws IOException {
+                    credential.initialize(request);
+                    request.setParser(new JsonObjectParser(JSON_FACTORY));
+                }
+            });
             GenericUrl url = new GenericUrl(provider.token_endpoint);
             HttpRequest request = requestFactory.buildHeadRequest(url);
             request.execute().getStatusCode();
         } catch (com.google.api.client.http.HttpResponseException hre) {
-            if (hre.getStatusCode() == 404) {
-                LOGGER.log(Level.INFO, "OpenShift OAuth got an unexpected 404 trying out the issuer's token endpoint", hre);
+            if (hre.getStatusCode() == HTTP_NOT_FOUND) {
+                LOGGER.log(INFO, "OpenShift OAuth got an unexpected 404 trying out the issuer's token endpoint", hre);
             }
-        } catch (javax.net.ssl.SSLHandshakeException ssle) {
-            LOGGER.info("OpenShift OAuth got a SSL error when accessing the issuer's token endpoint when using the SA certificate");
+        } catch (SSLHandshakeException ssle) {
+            String formattedMessage = "OpenShift OAuth got an SSL error when accessing the issuer's token endpoint when using the SA certificate";
+            LOGGER.info(formattedMessage);
             try {
+                if (jvmDefaultKeystoreTransport == null) {
+                    LOGGER.log(INFO, "jvmDefaultKeystoreTransport was not initialized: Forcing initalization");
+                    jvmDefaultKeystoreTransport = new NetHttpTransport.Builder().build();
+                }
+
                 HttpRequestFactory requestFactory = jvmDefaultKeystoreTransport
                         .createRequestFactory(new HttpRequestInitializer() {
-                            public void initialize(HttpRequest request)
-                                    throws IOException {
+
+                            public void initialize(HttpRequest request) throws IOException {
                                 credential.initialize(request);
                                 request.setParser(new JsonObjectParser(JSON_FACTORY));
                             }
                         });
+
                 GenericUrl url = new GenericUrl(provider.token_endpoint);
                 HttpRequest request = requestFactory.buildHeadRequest(url);
                 request.execute().getStatusCode();
-                // most likely will not get here on vanilla head request but just in case 
-                LOGGER.info("OpenShift OAuth was able to complete the SSL handshake when accessing the issuer's token endpoint using the JVMs default keystore");
+                // most likely will not get here on vanilla head request but just in case
+                LOGGER.info(
+                        "OpenShift OAuth was able to complete the SSL handshake when accessing the issuer's token endpoint using the JVMs default keystore");
             } catch (com.google.api.client.http.HttpResponseException hre) {
-                // this means SSL handshakes work, but our generic head simply is not honored by the endpoint
-                LOGGER.info("OpenShift OAuth was able to complete the SSL handshake when accessing the issuer's token endpoint using the JVMs default keystore");
+                // this means SSL handshakes work, but our generic head simply is not honored by
+                // the endpoint
+                LOGGER.info(
+                        "OpenShift OAuth was able to complete the SSL handshake when accessing the issuer's token endpoint using the JVMs default keystore");
                 return jvmDefaultKeystoreTransport;
             } catch (Throwable t) {
-                LOGGER.log(Level.INFO, "OpenShift OAuth provider token endpoint failed unexpectedly using the JVMs default keystore", t);
+                LOGGER.log(Level.INFO,
+                        "OpenShift OAuth provider token endpoint failed unexpectedly using the JVMs default keystore",
+                        t);
                 return jvmDefaultKeystoreTransport;
             }
         } catch (Throwable t) {
-            LOGGER.log(Level.INFO, "OpenShift OAuth provider token endpoint failed unexpectedly using this pod's SA's certificate", t);
+            LOGGER.log(Level.INFO,
+                    "OpenShift OAuth provider token endpoint failed unexpectedly using this pod's SA's certificate", t);
         }
         return transport;
     }
-    
+
     private boolean useProviderOAuthEndpoint(final Credential credential) {
         if (provider == null)
             return false;
         try {
             GenericUrl url = new GenericUrl(defaultedServerPrefix + "/version");
-            HttpRequestFactory requestFactory = transport
-                    .createRequestFactory(new HttpRequestInitializer() {
-                        public void initialize(HttpRequest request)
-                                throws IOException {
-                            credential.initialize(request);
-                            request.setParser(new JsonObjectParser(JSON_FACTORY));
-                        }
-                    });
+            HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
+                public void initialize(HttpRequest request) throws IOException {
+                    credential.initialize(request);
+                    request.setParser(new JsonObjectParser(JSON_FACTORY));
+                }
+            });
             HttpRequest request = requestFactory.buildGetRequest(url);
             com.google.api.client.http.HttpResponse response = request.execute();
             int rc = response.getStatusCode();
-            if (rc != 200)
-                LOGGER.info("OpenShift OAuth the attempt to get the server version request got an unexpected return code: " + rc);
+            if (rc != HTTP_OK)
+                LOGGER.info(
+                        "OpenShift OAuth the attempt to get the server version request got an unexpected return code: "
+                                + rc);
             OpenShiftVersionInfo version = response.parseAs(OpenShiftVersionInfo.class);
             if (version != null && version.major != null && version.major.equals("1")) {
                 if (version.minor.length() > 2) {
@@ -634,7 +621,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                         LOGGER.info("OpenShift OAuth server is 4.x, specifically " + version.toString());
                         return true;
                     }
-                    
+
                 } else {
                     // 3.x cluster
                     LOGGER.info("OpenShift OAuth the server is 3.x, specifically " + version.toString());
@@ -652,27 +639,23 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         return false;
     }
 
-    private OpenShiftUserInfo getOpenShiftUserInfo(final Credential credential,
-            final HttpTransport transport) throws IOException {
-        HttpRequestFactory requestFactory = transport
-                .createRequestFactory(new HttpRequestInitializer() {
-                    public void initialize(HttpRequest request)
-                            throws IOException {
-                        credential.initialize(request);
-                        request.setParser(new JsonObjectParser(JSON_FACTORY));
-                    }
-                });
+    private OpenShiftUserInfo getOpenShiftUserInfo(final Credential credential, final HttpTransport transport)
+            throws IOException {
+        HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
+            public void initialize(HttpRequest request) throws IOException {
+                credential.initialize(request);
+                request.setParser(new JsonObjectParser(JSON_FACTORY));
+            }
+        });
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + USER_URI);
 
         HttpRequest request = requestFactory.buildGetRequest(url);
 
-        OpenShiftUserInfo info = request.execute().parseAs(
-                OpenShiftUserInfo.class);
+        OpenShiftUserInfo info = request.execute().parseAs(OpenShiftUserInfo.class);
         return info;
     }
 
-    private String buildSARJson(String namespace, String verb)
-            throws IOException {
+    private String buildSARJson(String namespace, String verb) throws IOException {
         OpenShiftSubjectAccessReviewRequest request = new OpenShiftSubjectAccessReviewRequest();
         request.namespace = namespace;
         request.verb = verb;
@@ -680,8 +663,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         return json;
     }
 
-    private HttpRequest buildPostSARRequest(HttpRequestFactory requestFactory,
-            GenericUrl url, final String json) throws IOException {
+    private HttpRequest buildPostSARRequest(HttpRequestFactory requestFactory, GenericUrl url, final String json)
+            throws IOException {
         HttpContent contentAdmin = new HttpContent() {
 
             @Override
@@ -709,16 +692,13 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         return requestFactory.buildPostRequest(url, contentAdmin);
     }
 
-    private ArrayList<String> postSAR(final Credential credential,
-            final HttpTransport transport) throws IOException {
-        HttpRequestFactory requestFactory = transport
-                .createRequestFactory(new HttpRequestInitializer() {
-                    public void initialize(HttpRequest request)
-                            throws IOException {
-                        credential.initialize(request);
-                        request.setParser(new JsonObjectParser(JSON_FACTORY));
-                    }
-                });
+    private ArrayList<String> postSAR(final Credential credential, final HttpTransport transport) throws IOException {
+        HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
+            public void initialize(HttpRequest request) throws IOException {
+                credential.initialize(request);
+                request.setParser(new JsonObjectParser(JSON_FACTORY));
+            }
+        });
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + SAR_URI);
 
         ArrayList<String> allowedRoles = new ArrayList<String>();
@@ -727,8 +707,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             if (json == null) {
                 LOGGER.info("DBG json null ... namespace " + namespace + " verb " + verb);
             }
-            HttpRequest request = this.buildPostSARRequest(requestFactory, url,
-                    json);
+            HttpRequest request = this.buildPostSARRequest(requestFactory, url, json);
             if (request == null) {
                 LOGGER.info("DBG request null");
             }
@@ -736,68 +715,43 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                     .parseAs(OpenShiftSubjectAccessReviewResponse.class);
             if (review != null) {
                 if (LOGGER.isLoggable(Level.FINE))
-                    LOGGER.fine(String
-                            .format("postSAR: response for verb %s hydrated into obj: namespace %s allowed %s reason %s",
-                                    verb, review.namespace,
-                                    Boolean.toString(review.allowed),
-                                    review.reason));
+                    LOGGER.fine(String.format(
+                            "postSAR: response for verb %s hydrated into obj: namespace %s allowed %s reason %s", verb,
+                            review.namespace, Boolean.toString(review.allowed), review.reason));
                 if (review.allowed && !allowedRoles.contains(verb)) {
                     allowedRoles.add(verb);
                 }
-                    
+
             }
         }
         return allowedRoles;
     }
-    
+
     private Map<String, List<Permission>> getRoleToPermissionMap(final HttpTransport transport) {
         // set up default
         Map<String, List<Permission>> permMap = new HashMap<String, List<Permission>>();
-        ArrayList<Permission> viewPerms = new ArrayList<Permission>(Arrays.asList(
-                Hudson.READ,
-                Item.READ,
-                Item.DISCOVER,
-                CredentialsProvider.VIEW));
+        ArrayList<Permission> viewPerms = new ArrayList<Permission>(
+                Arrays.asList(Hudson.READ, Item.READ, Item.DISCOVER, CredentialsProvider.VIEW));
         permMap.put("view", viewPerms);
         ArrayList<Permission> editPerms = new ArrayList<Permission>(viewPerms);
-        editPerms.addAll(new ArrayList<Permission>(Arrays.asList(
-                Item.BUILD, 
-                Item.CONFIGURE,
-                Item.CREATE,
-                Item.DELETE,
-                Item.CANCEL,
-                Item.WORKSPACE,
-                SCM.TAG,
-                Jenkins.RUN_SCRIPTS)));
+        editPerms.addAll(new ArrayList<Permission>(Arrays.asList(Item.BUILD, Item.CONFIGURE, Item.CREATE, Item.DELETE,
+                Item.CANCEL, Item.WORKSPACE, SCM.TAG, Jenkins.RUN_SCRIPTS)));
         permMap.put("edit", editPerms);
         ArrayList<Permission> adminPerms = new ArrayList<Permission>(editPerms);
-        adminPerms.addAll(new ArrayList<Permission>(Arrays.asList(
-                Computer.CONFIGURE,
-                Computer.DELETE,
-                Hudson.ADMINISTER,
-                Hudson.READ,
-                Run.DELETE,
-                Run.UPDATE,
-                View.CONFIGURE,
-                View.CREATE,
-                View.DELETE,
-                CredentialsProvider.CREATE,
-                CredentialsProvider.UPDATE,
-                CredentialsProvider.DELETE,
-                CredentialsProvider.MANAGE_DOMAINS)));
+        adminPerms.addAll(new ArrayList<Permission>(
+                Arrays.asList(Computer.CONFIGURE, Computer.DELETE, Hudson.ADMINISTER, Hudson.READ, Run.DELETE,
+                        Run.UPDATE, View.CONFIGURE, View.CREATE, View.DELETE, CredentialsProvider.CREATE,
+                        CredentialsProvider.UPDATE, CredentialsProvider.DELETE, CredentialsProvider.MANAGE_DOMAINS)));
         permMap.put("admin", adminPerms);
-        
-        final Credential credential = new Credential(
-                BearerToken.authorizationHeaderAccessMethod())
+
+        final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
                 .setAccessToken(getDefaultedClientSecret().getPlainText());
-        HttpRequestFactory requestFactory = transport
-                .createRequestFactory(new HttpRequestInitializer() {
-                    public void initialize(HttpRequest request)
-                            throws IOException {
-                        credential.initialize(request);
-                        request.setParser(new JsonObjectParser(JSON_FACTORY));
-                    }
-                });
+        HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
+            public void initialize(HttpRequest request) throws IOException {
+                credential.initialize(request);
+                request.setParser(new JsonObjectParser(JSON_FACTORY));
+            }
+        });
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + String.format(CONFIG_MAP_URI, namespace));
         HttpRequest request = null;
         ConfigMapResponse response = null;
@@ -806,49 +760,50 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             request = requestFactory.buildGetRequest(url);
             response = request.execute().parseAs(ConfigMapResponse.class);
         } catch (IOException e) {
-            LOGGER.info(prefix + " could not find the openshift-jenkins-login-plugin-config config map in namespace " +
-                    namespace + " so the default permission mapping will be used");
+            LOGGER.info(prefix + " could not find the openshift-jenkins-login-plugin-config config map in namespace "
+                    + namespace + " so the default permission mapping will be used");
             LOGGER.log(Level.FINE, "getRoleToPermissionMap", e);
             return permMap;
         }
-        
-        
+
         if (response == null || response.data == null || response.data.size() == 0) {
-            LOGGER.info(prefix + " did not see the openshift-jenkins-login-plugin-config config map in namespace " + 
-                    namespace + " so the default permission mapping will be used");
+            LOGGER.info(prefix + " did not see the openshift-jenkins-login-plugin-config config map in namespace "
+                    + namespace + " so the default permission mapping will be used");
             return permMap;
         }
-                
+
         permMap.clear();
         List<Permission> permissionsInSystem = Permission.getAll();
-        for (Entry<String,String> entry : response.data.entrySet()) {
+        for (Entry<String, String> entry : response.data.entrySet()) {
             String permStr = entry.getKey();
-            
+
             String[] permStrArr = permStr.trim().split("-");
             if (permStrArr == null || permStrArr.length != 2) {
-                LOGGER.info(prefix + " ignore permission string " + permStr +
-                        " since if is not of the form <permGroupId>-<permId>");
+                LOGGER.info(prefix + " ignore permission string " + permStr
+                        + " since if is not of the form <permGroupId>-<permId>");
                 continue;
             }
-            
+
             Permission perm = null;
             for (Permission permInSys : permissionsInSystem) {
-                LOGGER.fine("permInSys.group.title.toString().trim() " + permInSys.group.title.toString().trim() );
+                LOGGER.fine("permInSys.group.title.toString().trim() " + permInSys.group.title.toString().trim());
                 LOGGER.fine("permStrArr[0].trim() " + permStrArr[0].trim());
                 LOGGER.fine("permInSys.name.trim() " + permInSys.name.trim());
                 LOGGER.fine("permStrArr[1].trim() " + permStrArr[1].trim());
-                if (permInSys.group.title.toString().trim().equalsIgnoreCase(permStrArr[0].trim())&&
-                    permInSys.name.trim().equalsIgnoreCase(permStrArr[1].trim())) {
+                if (permInSys.group.title.toString().trim().equalsIgnoreCase(permStrArr[0].trim())
+                        && permInSys.name.trim().equalsIgnoreCase(permStrArr[1].trim())) {
                     perm = permInSys;
-                    LOGGER.info(prefix + " matching configured permission " + permStr + " to Jenkins permission " + perm);
+                    LOGGER.info(
+                            prefix + " matching configured permission " + permStr + " to Jenkins permission " + perm);
                     break;
                 }
             }
             if (perm == null) {
-                LOGGER.warning(prefix + " could not find permission " + permStr + " in Jenkins list of all available permissions");
+                LOGGER.warning(prefix + " could not find permission " + permStr
+                        + " in Jenkins list of all available permissions");
                 continue;
             }
-            
+
             String roleList = entry.getValue();
             if (roleList == null) {
                 LOGGER.warning("No roles specified for permission " + permStr + " in login plugin config map");
@@ -856,10 +811,11 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             }
             String[] permRoles = roleList.split(",");
             if (permRoles == null || permRoles.length == 0) {
-                LOGGER.warning("No roles specified for permission " + permStr + " in login plugin config map: " + roleList);
+                LOGGER.warning(
+                        "No roles specified for permission " + permStr + " in login plugin config map: " + roleList);
             }
-                        
-            for (String role : permRoles ) {
+
+            for (String role : permRoles) {
                 // Permission class implements equals and hashCode
                 List<Permission> permList = permMap.get(role);
                 if (permList == null) {
@@ -872,7 +828,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                 }
             }
         }
-        
+
         roles.clear();
         for (String key : permMap.keySet()) {
             if (!roles.contains(key))
@@ -883,29 +839,26 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
 
     /**
-     * Acegi has this notion that first an
-     * {@link org.acegisecurity.Authentication} object is created by collecting
-     * user information and then the act of authentication is done later (by
-     * {@link org.acegisecurity.AuthenticationManager}) to verify it. But in
-     * case of OpenID, we create an {@link org.acegisecurity.Authentication}
-     * only after we verified the user identity, so
+     * Acegi has this notion that first an {@link org.acegisecurity.Authentication}
+     * object is created by collecting user information and then the act of
+     * authentication is done later (by
+     * {@link org.acegisecurity.AuthenticationManager}) to verify it. But in case of
+     * OpenID, we create an {@link org.acegisecurity.Authentication} only after we
+     * verified the user identity, so
      * {@link org.acegisecurity.AuthenticationManager} becomes no-op.
      */
     @Override
     public SecurityComponents createSecurityComponents() {
         return new SecurityComponents(new AuthenticationManager() {
-            public Authentication authenticate(Authentication authentication)
-                    throws AuthenticationException {
+            public Authentication authenticate(Authentication authentication) throws AuthenticationException {
                 if (authentication instanceof AnonymousAuthenticationToken)
                     return authentication;
-                throw new BadCredentialsException(
-                        "Unexpected authentication type: " + authentication);
+                throw new BadCredentialsException("Unexpected authentication type: " + authentication);
             }
         });
     }
 
-    protected OAuthSession newOAuthSession(String from,
-            final String redirectOnFinish) throws MalformedURLException {
+    protected OAuthSession newOAuthSession(String from, final String redirectOnFinish) throws MalformedURLException {
         // shout out to Cesar, while the auth server URL needs to be publicly
         // accessible such that the browser
         // can reference it, the token server URL does not; see
@@ -919,12 +872,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         // use the configured server prefix, where if not explicitly configured
         // we go with the internally accessible default
         HttpTransport transportForThisRequest = transport;
-        GenericUrl tsu = new GenericUrl(
-                getDefaultedServerPrefix() + "/oauth/token");
-        String asu = getDefaultedRedirectURL()
-                + "/oauth/authorize";
-        final Credential credential = new Credential(
-                BearerToken.authorizationHeaderAccessMethod())
+        GenericUrl tsu = new GenericUrl(getDefaultedServerPrefix() + "/oauth/token");
+        String asu = getDefaultedRedirectURL() + "/oauth/authorize";
+        final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
                 .setAccessToken(getDefaultedClientSecret().getPlainText());
         if (useProviderOAuthEndpoint(credential)) {
             LOGGER.info("OpenShift OAuth using OAuth Provider specified endpoints for this login flow");
@@ -937,13 +887,11 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         final GenericUrl tokenServerURL = tsu;
         final String authorizationServerURL = asu;
 
-        final AuthorizationCodeFlow flow = new AuthorizationCodeFlow.Builder(
-                BearerToken.queryParameterAccessMethod(), transportForThisRequest,
-                JSON_FACTORY, tokenServerURL,
-                new ClientParametersAuthentication(getDefaultedClientId(),
-                        getDefaultedClientSecret().getPlainText()),
-                getDefaultedClientId(), authorizationServerURL).setScopes(
-                Arrays.asList(SCOPE_INFO, SCOPE_CHECK_ACCESS)).build();
+        final AuthorizationCodeFlow flow = new AuthorizationCodeFlow.Builder(BearerToken.queryParameterAccessMethod(),
+                transportForThisRequest, JSON_FACTORY, tokenServerURL,
+                new ClientParametersAuthentication(getDefaultedClientId(), getDefaultedClientSecret().getPlainText()),
+                getDefaultedClientId(), authorizationServerURL).setScopes(Arrays.asList(SCOPE_INFO, SCOPE_CHECK_ACCESS))
+                        .build();
 
         final OpenShiftOAuth2SecurityRealm secRealm = this;
         final String url = buildOAuthRedirectUrl(redirectOnFinish);
@@ -952,11 +900,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             @Override
             public HttpResponse onSuccess(String authorizationCode) {
                 try {
-                    IdTokenResponse response = IdTokenResponse.execute(flow
-                            .newTokenRequest(authorizationCode).setRedirectUri(
-                                    url));
-                    final Credential credential = new Credential(
-                            BearerToken.authorizationHeaderAccessMethod())
+                    IdTokenResponse response = IdTokenResponse
+                            .execute(flow.newTokenRequest(authorizationCode).setRedirectUri(url));
+                    final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
                             .setFromTokenResponse(response);
                     this.setCredential(credential);
                     secRealm.updateAuthorizationStrategy(credential);
@@ -973,11 +919,11 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         };
     }
 
-    public UsernamePasswordAuthenticationToken updateAuthorizationStrategy(
-            Credential credential) throws IOException, GeneralSecurityException {
+    public UsernamePasswordAuthenticationToken updateAuthorizationStrategy(Credential credential)
+            throws IOException, GeneralSecurityException {
         populateDefaults();
         OpenShiftUserInfo info = getOpenShiftUserInfo(credential, transport);
-        Map<String,List<Permission>> cfgedRolePermMap = getRoleToPermissionMap(transport);
+        Map<String, List<Permission>> cfgedRolePermMap = getRoleToPermissionMap(transport);
         ArrayList<String> allowedRoles = postSAR(credential, transport);
         GrantedAuthority[] authorities = new GrantedAuthority[] { SecurityRealm.AUTHENTICATED_AUTHORITY };
 
@@ -1012,8 +958,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         UsernamePasswordAuthenticationToken token = null;
         if (suffix != null) {
             String matrixKey = info.getName() + suffix;
-            token = new UsernamePasswordAuthenticationToken(matrixKey, "",
-                    authorities);
+            token = new UsernamePasswordAuthenticationToken(matrixKey, "", authorities);
             SecurityContextHolder.getContext().setAuthentication(token);
 
             User u = User.get(token.getName());
@@ -1051,9 +996,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                 Set<String> usersGroups = existingAuthMgr.getGroups();
 
                 if (LOGGER.isLoggable(Level.FINE))
-                    LOGGER.fine(String
-                            .format("updateAuthorizationStrategy: got users %s where this user is %s",
-                                    usersGroups.toString(), info.getName()));
+                    LOGGER.fine(String.format("updateAuthorizationStrategy: got users %s where this user is %s",
+                            usersGroups.toString(), info.getName()));
 
                 if (usersGroups.contains(matrixKey)) {
                     // since we store username-maxrole in the auth matrix, we
@@ -1061,15 +1005,13 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                     // as a key, there is no need to update the matrix
                     // since our permissions are still the same on the openshift
                     // side
-                    LOGGER.info(String
-                            .format("OpenShift OAuth: user %s, stored in the matrix as %s, based on OpenShift roles %s already exists in Jenkins",
-                                    info.getName(), matrixKey, allowedRoles));
+                    LOGGER.info(String.format(
+                            "OpenShift OAuth: user %s, stored in the matrix as %s, based on OpenShift roles %s already exists in Jenkins",
+                            info.getName(), matrixKey, allowedRoles));
                 } else {
-                    List<PermissionGroup> permissionGroups = new ArrayList<PermissionGroup>(
-                            PermissionGroup.getAll());
+                    List<PermissionGroup> permissionGroups = new ArrayList<PermissionGroup>(PermissionGroup.getAll());
                     if (LOGGER.isLoggable(Level.FINE))
-                        LOGGER.fine(String.format(
-                                "updateAuthorizationStrategy: permissions %s",
+                        LOGGER.fine(String.format("updateAuthorizationStrategy: permissions %s",
                                 permissionGroups.toString()));
 
                     GlobalMatrixAuthorizationStrategy newAuthMgr = null;
@@ -1095,27 +1037,26 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
                         // map OpenShift user based on role to Jenkins user with
                         // analogous permissions
-                        LOGGER.info(String
-                                .format("OpenShift OAuth: adding permissions for user %s, stored in the matrix as %s, based on OpenShift roles %s",
-                                        info.getName(), matrixKey, allowedRoles));
+                        LOGGER.info(String.format(
+                                "OpenShift OAuth: adding permissions for user %s, stored in the matrix as %s, based on OpenShift roles %s",
+                                info.getName(), matrixKey, allowedRoles));
                         for (String role : allowedRoles) {
                             List<Permission> perms = cfgedRolePermMap.get(role);
                             for (Permission perm : perms) {
                                 newAuthMgr.add(perm, matrixKey);
                             }
                         }
-                        
-                        Jenkins.getInstance().setAuthorizationStrategy(
-                                newAuthMgr);
+
+                        Jenkins.getInstance().setAuthorizationStrategy(newAuthMgr);
                         try {
                             Jenkins.getInstance().save();
                         } catch (Throwable t) {
                             // see https://jenkins.io/blog/2018/03/15/jep-200-lts/#after-the-upgrade
-                            // running on 2.107 ... seen intermittent errors here, even after 
+                            // running on 2.107 ... seen intermittent errors here, even after
                             // marking transport transient (as the xml stuff does not use standard
-                            // serialization; switch from transient instance var to static var to 
+                            // serialization; switch from transient instance var to static var to
                             // attempt to avoid xml marshalling;
-                            // Always logging for now, but will monitor and bracket with a FINE 
+                            // Always logging for now, but will monitor and bracket with a FINE
                             // logging level check if this becomes very verbose.
                             LOGGER.log(Level.INFO, "updateAuthorizationStrategy", t);
                         }
@@ -1131,11 +1072,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     /**
      * The login process starts from here.
      */
-    public HttpResponse doCommenceLogin(@QueryParameter String from,
-            @Header("Referer") final String referer) throws IOException {
+    public HttpResponse doCommenceLogin(@QueryParameter String from, @Header("Referer") final String referer)
+            throws IOException {
         if (LOGGER.isLoggable(Level.FINE))
-            LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(),
-                    START_METHOD, new Object[] { from, referer });
+            LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), START_METHOD, new Object[] { from, referer });
 
         // refresh defaults just in case the jenkins pod was recycled, etc.
         try {
@@ -1165,8 +1105,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         return newOAuthSession(from, redirectOnFinish).doCommenceLogin();
     }
 
-    private String buildOAuthRedirectUrl(String redirect)
-            throws MalformedURLException {
+    private String buildOAuthRedirectUrl(String redirect) throws MalformedURLException {
         if (redirectUrl != null)
             return redirectUrl;
         URL url = null;
@@ -1176,8 +1115,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             // finishLogin path
             // also validate the protocol as a sanity check
             if (url != null
-                    && (url.getProtocol().equalsIgnoreCase("http") || url
-                            .getProtocol().equalsIgnoreCase("https"))) {
+                    && (url.getProtocol().equalsIgnoreCase("http") || url.getProtocol().equalsIgnoreCase("https"))) {
                 // Get the current request to check if Jenkins was launched with
                 // a prefix set and append it after the URL Host.
                 final String prefix;
@@ -1189,30 +1127,25 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                     prefix = "";
                 }
 
-                return url.getProtocol() + "://" + url.getHost()
-                        + prefix + "/securityRealm/finishLogin";
+                return url.getProtocol() + "://" + url.getHost() + prefix + "/securityRealm/finishLogin";
             }
         } catch (MalformedURLException e) {
             throw e;
         }
-        throw new MalformedURLException("redirect url " + redirect
-                + " insufficient");
+        throw new MalformedURLException("redirect url " + redirect + " insufficient");
     }
 
     /**
      * This is where the user comes back to at the end of the OpenID redirect
      * ping-pong.
      */
-    public HttpResponse doFinishLogin(StaplerRequest request)
-            throws IOException {
+    public HttpResponse doFinishLogin(StaplerRequest request) throws IOException {
         if (LOGGER.isLoggable(Level.FINE)) {
             if (request != null)
-                LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(),
-                        FINISH_METHOD, new Object[] { request.getQueryString(),
-                                request.getRequestURL() });
+                LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), FINISH_METHOD,
+                        new Object[] { request.getQueryString(), request.getRequestURL() });
             else
-                LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(),
-                        FINISH_METHOD);
+                LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), FINISH_METHOD);
         }
         if (OAuthSession.getCurrent() != null) {
             return OAuthSession.getCurrent().doFinishLogin(request);
@@ -1257,43 +1190,36 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             return DISPLAY_NAME;
         }
 
-        private FormValidation paramsWithPodDefaults(
-                @QueryParameter String value) {
+        private FormValidation paramsWithPodDefaults(@QueryParameter String value) {
             if (value == null || value.length() == 0)
-                return FormValidation
-                        .warning("Unless you specify a value here, the assumption will be that Jenkins is running inside an OpenShift pod, where the value is available.");
+                return FormValidation.warning(
+                        "Unless you specify a value here, the assumption will be that Jenkins is running inside an OpenShift pod, where the value is available.");
             return FormValidation.ok();
         }
 
-        public FormValidation doCheckServiceAccountDirectory(
-                @QueryParameter String value) throws IOException,
-                ServletException {
-            return paramsWithPodDefaults(value);
-        }
-
-        public FormValidation doCheckClientId(@QueryParameter String value)
+        public FormValidation doCheckServiceAccountDirectory(@QueryParameter String value)
                 throws IOException, ServletException {
             return paramsWithPodDefaults(value);
         }
 
-        public FormValidation doCheckClientSecret(@QueryParameter String value)
-                throws IOException, ServletException {
+        public FormValidation doCheckClientId(@QueryParameter String value) throws IOException, ServletException {
             return paramsWithPodDefaults(value);
         }
 
-        public FormValidation doCheckServerPrefix(@QueryParameter String value)
-                throws IOException, ServletException {
+        public FormValidation doCheckClientSecret(@QueryParameter String value) throws IOException, ServletException {
             return paramsWithPodDefaults(value);
         }
 
-        public FormValidation doCheckRedirectURL(@QueryParameter String value)
-                throws IOException, ServletException {
+        public FormValidation doCheckServerPrefix(@QueryParameter String value) throws IOException, ServletException {
             return paramsWithPodDefaults(value);
         }
 
-        public FormValidation doCheckServiceAccountName(
-                @QueryParameter String value) throws IOException,
-                ServletException {
+        public FormValidation doCheckRedirectURL(@QueryParameter String value) throws IOException, ServletException {
+            return paramsWithPodDefaults(value);
+        }
+
+        public FormValidation doCheckServiceAccountName(@QueryParameter String value)
+                throws IOException, ServletException {
             return paramsWithPodDefaults(value);
         }
 
