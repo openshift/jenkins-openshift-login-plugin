@@ -27,6 +27,7 @@ package org.openshift.jenkins.plugins.openshiftlogin;
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 import static java.net.HttpURLConnection.HTTP_OK;
 import static java.util.logging.Level.INFO;
+import static org.apache.commons.lang.StringUtils.isNotBlank;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -114,6 +115,8 @@ import jenkins.security.SecurityListener;
  *
  */
 public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
+    private static final String EMPTY_STRING = "";
+
     static final Logger LOGGER = Logger.getLogger(OpenShiftOAuth2SecurityRealm.class.getName());
 
     /**
@@ -144,6 +147,11 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
     static final String LOGGING_OUT = "loggingOut";
 
+    private static final String HTTPS_SCHEME = "https";
+    private static final String HTTP_SCHEME = "http";
+    private static final String SCHEME_SEPARATOR = "://";
+    private static final String PORT_SEPARATOR = ":";
+    public static final String SECURITY_REALM_FINISH_LOGIN = "/securityRealm/finishLogin";
     /**
      * Global instance of the JSON factory.
      */
@@ -161,7 +169,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     /**
      * Control the redirection URL for this realm. Exposed for testing.
      */
-    static String redirectUrl;
+    String redirectUrl;
     /**
      * Allow a custom transport to be injected. Exposed for testing.
      */
@@ -958,7 +966,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         UsernamePasswordAuthenticationToken token = null;
         if (suffix != null) {
             String matrixKey = info.getName() + suffix;
-            token = new UsernamePasswordAuthenticationToken(matrixKey, "", authorities);
+            token = new UsernamePasswordAuthenticationToken(matrixKey, EMPTY_STRING, authorities);
             SecurityContextHolder.getContext().setAuthentication(token);
 
             User u = User.get(token.getName());
@@ -1105,29 +1113,32 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         return newOAuthSession(from, redirectOnFinish).doCommenceLogin();
     }
 
-    private String buildOAuthRedirectUrl(String redirect) throws MalformedURLException {
-        if (redirectUrl != null)
-            return redirectUrl;
+    public String buildOAuthRedirectUrl(String redirect) throws MalformedURLException {
+        if (this.redirectUrl != null)
+            return this.redirectUrl;
         URL url = null;
         try {
             url = new URL(redirect);
             // just in case, strip redirect to a "root" url before appending the
             // finishLogin path
             // also validate the protocol as a sanity check
-            if (url != null
-                    && (url.getProtocol().equalsIgnoreCase("http") || url.getProtocol().equalsIgnoreCase("https"))) {
-                // Get the current request to check if Jenkins was launched with
-                // a prefix set and append it after the URL Host.
-                final String prefix;
+            String protocol = url.getProtocol();
+            if (url != null && (protocol.equalsIgnoreCase(HTTP_SCHEME) || protocol.equalsIgnoreCase(HTTPS_SCHEME))) {
+                // Get the current request to check if Jenkins was launched with a prefix set
+                // and append it after the URL Host.
                 StaplerRequest req = Stapler.getCurrentRequest();
+                String contextPath = req != null ? req.getContextPath().trim() : EMPTY_STRING;
+                String prefix = isNotBlank(contextPath.trim()) ? contextPath : EMPTY_STRING;
 
-                if (req != null) {
-                    prefix = req.getContextPath();
-                } else {
-                    prefix = "";
-                }
-
-                return url.getProtocol() + "://" + url.getHost() + prefix + "/securityRealm/finishLogin";
+                // if a port is specified, it is appended, unless it is the default port for the
+                // given protocol e.g: http://host:80/ => http://host/
+                // https://host:8443/ => https://host:8443
+                int defaultPort = url.getDefaultPort();
+                int port = url.getPort();
+                String redirectPort = (port > 0 && port != defaultPort) ? PORT_SEPARATOR + port : EMPTY_STRING;
+                StringBuilder sb = new StringBuilder(protocol).append(SCHEME_SEPARATOR).append(url.getHost());
+                sb.append(redirectPort).append(prefix).append(SECURITY_REALM_FINISH_LOGIN);
+                return sb.toString();
             }
         } catch (MalformedURLException e) {
             throw e;
@@ -1180,7 +1191,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         // avoid the need for the
         // 2 login attempts after logout when jenkins is recycled in the
         // interim.
-        return req.getRequestURL().toString().replace(LOGOUT, "");
+        return req.getRequestURL().toString().replace(LOGOUT, EMPTY_STRING);
     }
 
     @Extension
