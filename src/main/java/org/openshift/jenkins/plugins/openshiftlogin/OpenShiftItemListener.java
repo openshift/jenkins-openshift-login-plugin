@@ -26,7 +26,6 @@ package org.openshift.jenkins.plugins.openshiftlogin;
 
 import java.util.logging.Logger;
 
-import hudson.EnvVars;
 import hudson.Extension;
 import hudson.model.Item;
 import hudson.model.listeners.ItemListener;
@@ -34,8 +33,7 @@ import hudson.model.listeners.ItemListener;
 @Extension
 public class OpenShiftItemListener extends ItemListener {
 
-    static final Logger LOGGER = Logger.getLogger(OpenShiftItemListener.class
-            .getName());
+    static final Logger LOGGER = Logger.getLogger(OpenShiftItemListener.class.getName());
 
     @Override
     public void onLoaded() {
@@ -63,8 +61,7 @@ public class OpenShiftItemListener extends ItemListener {
     }
 
     @Override
-    public void onLocationChanged(Item item, String oldFullName,
-            String newFullName) {
+    public void onLocationChanged(Item item, String oldFullName, String newFullName) {
         OpenShiftSetOAuth.setOauth();
     }
 

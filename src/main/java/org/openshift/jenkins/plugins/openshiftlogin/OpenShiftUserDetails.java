@@ -27,6 +27,7 @@ package org.openshift.jenkins.plugins.openshiftlogin;
 import org.acegisecurity.GrantedAuthority;
 import org.acegisecurity.userdetails.UserDetails;
 
+@SuppressWarnings("serial")
 public class OpenShiftUserDetails implements UserDetails {
     
     private String name;

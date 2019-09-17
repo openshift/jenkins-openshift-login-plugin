@@ -24,13 +24,8 @@
  */
 package org.openshift.jenkins.plugins.openshiftlogin;
 
-import hudson.EnvVars;
-import hudson.model.User;
-import hudson.security.SecurityRealm;
-
 import java.io.IOException;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.logging.Level;
 
@@ -52,6 +47,8 @@ import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.http.HttpResponseException;
 
+import hudson.EnvVars;
+import hudson.security.SecurityRealm;
 import jenkins.model.Jenkins;
 import jenkins.security.SecurityListener;
 
@@ -100,12 +97,12 @@ public class OpenShiftPermissionFilter implements Filter {
         UsernamePasswordAuthenticationToken token;
     }
 
+    @SuppressWarnings("serial")
     transient LinkedHashMap<String, BearerCacheEntry> bearerCache = new LinkedHashMap<String, BearerCacheEntry>(
             MAX_BEARER_CACHE_ENTRIES) {
 
         @Override
-        protected boolean removeEldestEntry(
-                Entry<String, BearerCacheEntry> eldest) {
+        protected boolean removeEldestEntry(Entry<String, BearerCacheEntry> eldest) {
             return size() > MAX_BEARER_CACHE_ENTRIES;
         }
 
@@ -120,14 +117,13 @@ public class OpenShiftPermissionFilter implements Filter {
     }
 
     @Override
-    public void doFilter(ServletRequest request, ServletResponse response,
-            FilterChain chain) throws IOException, ServletException {
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
         try {
             boolean updated = OpenShiftSetOAuth.setOauth(false);
             final HttpServletRequest httpRequest = (HttpServletRequest) request;
             long interval = SELF_SAR_POLL_INTERVAL;
-            String var = EnvVars.masterEnvVars
-                    .get(OPENSHIFT_PERMISSIONS_POLL_INTERVAL);
+            String var = EnvVars.masterEnvVars.get(OPENSHIFT_PERMISSIONS_POLL_INTERVAL);
             if (var != null) {
                 try {
                     interval = Long.parseLong(var);
@@ -138,35 +134,27 @@ public class OpenShiftPermissionFilter implements Filter {
             HttpSession s = httpRequest.getSession(false);
             if (s != null) {
 
-                OAuthSession oauth = (OAuthSession) s
-                        .getAttribute(OAuthSession.SESSION_NAME);
+                OAuthSession oauth = (OAuthSession) s.getAttribute(OAuthSession.SESSION_NAME);
                 if (oauth != null && oauth.getCredential() != null) {
                     try {
                         Long lastPermissionPoll = (Long) s
-                                .getAttribute(OAuthSession.SESSION_NAME
-                                        + LAST_SELF_SAR_POLL_TIME);
+                                .getAttribute(OAuthSession.SESSION_NAME + LAST_SELF_SAR_POLL_TIME);
                         if (lastPermissionPoll == null) {
-                            lastPermissionPoll = new Long(
-                                    System.currentTimeMillis());
-                            s.setAttribute(OAuthSession.SESSION_NAME
-                                    + LAST_SELF_SAR_POLL_TIME,
-                                    new Long(System.currentTimeMillis()));
+                            lastPermissionPoll = Long.valueOf(System.currentTimeMillis());
+                            s.setAttribute(OAuthSession.SESSION_NAME + LAST_SELF_SAR_POLL_TIME,
+                                    Long.valueOf(System.currentTimeMillis()));
                         }
 
                         if (updated
-                                || (System.currentTimeMillis()
-                                        - lastPermissionPoll.longValue() > (interval * 1000))) {
-                            OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins
-                                    .getInstance().getSecurityRealm();
-                            secRealm.updateAuthorizationStrategy(oauth
-                                    .getCredential());
-                            s.setAttribute(OAuthSession.SESSION_NAME
-                                    + LAST_SELF_SAR_POLL_TIME,
-                                    new Long(System.currentTimeMillis()));
+                                || (System.currentTimeMillis() - lastPermissionPoll.longValue() > (interval * 1000))) {
+                            OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins.getInstance()
+                                    .getSecurityRealm();
+                            secRealm.updateAuthorizationStrategy(oauth.getCredential());
+                            s.setAttribute(OAuthSession.SESSION_NAME + LAST_SELF_SAR_POLL_TIME,
+                                    Long.valueOf(System.currentTimeMillis()));
                         }
                     } catch (Throwable t) {
-                        OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.SEVERE,
-                                "filter", t);
+                        OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.SEVERE, "filter", t);
                     }
                 }
             } else if (Jenkins.getInstance().getSecurityRealm() instanceof OpenShiftOAuth2SecurityRealm) {
@@ -176,12 +164,10 @@ public class OpenShiftPermissionFilter implements Filter {
                 // browser) or anything like that;
                 // want the token provided on each access
                 try {
-                    String enabled = EnvVars.masterEnvVars
-                            .get(OPENSHIFT_ACCESS_VIA_BEARER_TOKEN);
+                    String enabled = EnvVars.masterEnvVars.get(OPENSHIFT_ACCESS_VIA_BEARER_TOKEN);
                     if (enabled == null || !enabled.equalsIgnoreCase("false")) {
                         String authHdr = httpRequest.getHeader("Authorization");
-                        if (authHdr != null && authHdr.length() > 0
-                                && authHdr.startsWith("Bearer")) {
+                        if (authHdr != null && authHdr.length() > 0 && authHdr.startsWith("Bearer")) {
                             String[] words = authHdr.split(" ");
                             if (words.length > 1) {
                                 String token = words[1];
@@ -194,22 +180,19 @@ public class OpenShiftPermissionFilter implements Filter {
                                     entry.lastCheck = 0;
                                     // we check for first time in case system time is say reset to 1970
                                     // (perhaps we are in a VM that just spun up and the time has not been set)
-                                    // we are not going to bother finding a negative number big enough to ensure 
+                                    // we are not going to bother finding a negative number big enough to ensure
                                     // we are greater than interval * 100 in this case
                                     firstTime = true;
                                 }
                                 if (updated || firstTime
-                                        || System.currentTimeMillis()
-                                                - entry.lastCheck > (interval * 1000)) {
-                                    entry.lastCheck = new Long(
-                                            System.currentTimeMillis());
+                                        || System.currentTimeMillis() - entry.lastCheck > (interval * 1000)) {
+                                    entry.lastCheck = Long.valueOf(System.currentTimeMillis());
                                     final Credential credential = new Credential(
-                                            BearerToken
-                                                    .authorizationHeaderAccessMethod())
-                                            .setAccessToken(token);
+                                            BearerToken.authorizationHeaderAccessMethod()).setAccessToken(token);
                                     OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins
                                             .getInstance().getSecurityRealm();
-                                    //REMINDER - updateAuthorizationStrategy will call SecurityContextHolder.getContext().setAuthentication
+                                    // REMINDER - updateAuthorizationStrategy will call
+                                    // SecurityContextHolder.getContext().setAuthentication
                                     UsernamePasswordAuthenticationToken jenkinsToken = secRealm
                                             .updateAuthorizationStrategy(credential);
 
@@ -223,9 +206,9 @@ public class OpenShiftPermissionFilter implements Filter {
                                     // this line
                                     entry.token = jenkinsToken;
                                 } else if (entry.token != null) {
-                                    SecurityContextHolder.getContext()
-                                            .setAuthentication(entry.token);
-                                    SecurityListener.fireAuthenticated(new OpenShiftUserDetails(entry.token.getName(), new GrantedAuthority[] { SecurityRealm.AUTHENTICATED_AUTHORITY }));
+                                    SecurityContextHolder.getContext().setAuthentication(entry.token);
+                                    SecurityListener.fireAuthenticated(new OpenShiftUserDetails(entry.token.getName(),
+                                            new GrantedAuthority[] { SecurityRealm.AUTHENTICATED_AUTHORITY }));
                                 } else {
                                     HttpServletResponse httpResponse = (HttpServletResponse) response;
                                     httpResponse.sendError(401, NEED_TO_AUTH);
@@ -235,11 +218,9 @@ public class OpenShiftPermissionFilter implements Filter {
                     }
                 } catch (HttpResponseException e) {
                     HttpServletResponse httpResponse = (HttpServletResponse) response;
-                    httpResponse.sendError(e.getStatusCode(), e.getMessage()
-                            + NEED_TO_AUTH);
+                    httpResponse.sendError(e.getStatusCode(), e.getMessage() + NEED_TO_AUTH);
                 } catch (Throwable t) {
-                    OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.SEVERE,
-                            "filter", t);
+                    OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.SEVERE, "filter", t);
                 }
             }
 

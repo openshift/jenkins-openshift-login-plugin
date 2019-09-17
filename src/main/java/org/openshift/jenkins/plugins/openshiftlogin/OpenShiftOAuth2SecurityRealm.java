@@ -504,14 +504,6 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
 
     /**
-     * Login begins with our {@link #doCommenceLogin(String,String)} method.
-     */
-    @Override
-    public String getLoginUrl() {
-        return LOGIN_URL;
-    }
-
-    /**
      * Acegi has this notion that first an {@link org.acegisecurity.Authentication}
      * object is created by collecting user information and then the act of
      * authentication is done later (by
@@ -529,147 +521,12 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             throws IOException, GeneralSecurityException {
         populateDefaults();
         OpenShiftUserInfo info = getOpenShiftUserInfo(credential, transport);
-        Map<String, List<Permission>> cfgedRolePermMap = getRoleToPermissionMap(transport);
-        ArrayList<String> allowedRoles = postSAR(credential, transport);
+        Map<String, List<Permission>> roleToPermissions = getRoleToPermissionMap(transport);
+        ArrayList<String> roles = postSubjectAccessRequest(credential, transport);
         GrantedAuthority[] authorities = new GrantedAuthority[] { SecurityRealm.AUTHENTICATED_AUTHORITY };
 
-        // we append the role suffix to the name stored into Jenkins, since a
-        // given user is able to log in at varying scope/permission
-        // levels in openshift; however, for now, we make sure the display name
-        // for Jenkins does not include this suffix
-        String suffix = null;
-        for (String role : allowedRoles) {
-            if (suffix == null) {
-                suffix = "-" + role;
-            } else {
-                suffix = suffix + "-" + role;
-            }
-        }
-
-        // logs this user in.... with the index of
-        // UsernamePasswordAuthenticationToken token being matrixKey, that will
-        // tell jenkins auth
-        // code down the line what permissions to map to, where there 3
-        // permissions for each user possible, where the key for that permission
-        // is the username appended by -admin, -edit, or -view
-        // NOTE, if all three self-sars fail, where it has no permission entries
-        // in the jenkins auth matrix, we don't update the security ctx,
-        // and leave the user as the jenkins anonymous user; that way, a
-        // malicious
-        // user can't say create a "foo-admin" user, and get user foo's admin
-        // permission; note, if "foo-admin" has say view access, then his
-        // permission key via this token and matrixKey
-        // will be "foo-admin-view", and only have the jenkins permissions we've
-        // assigned to the view role
-        UsernamePasswordAuthenticationToken token = null;
-        if (suffix != null) {
-            String matrixKey = info.getName() + suffix;
-            token = new UsernamePasswordAuthenticationToken(matrixKey, "", authorities);
-            SecurityContextHolder.getContext().setAuthentication(token);
-
-            User user = User.get(token.getName());
-            info.updateProfile(user);
-            // this controls the user name that is displayed atop the Jenkins
-            // browser window;
-            // we'll display the "core" user name without the admin/edit/view
-            // suffix
-            user.setFullName(info.getName());
-            user.save();
-            SecurityListener.fireAuthenticated(new OpenShiftUserDetails(token.getName(), authorities));
-
-            /*
-             * So if you look at GlobalSecurityConfiguration and
-             * GlobalMatrixAuthorizationStrategy (including its DescriptorImpl) and the
-             * associated config.jelly files, you'll see that the AuthourizationStrategy
-             * object stored in Jenkins is *essentially* immutable (except for adds, with
-             * comments saying only to use durin contruction), and that when users
-             * manipulate the panel "Configure Global Security", new instances of
-             * Global/ProjectMatrixAuthorizationStrategy are created, where existing users
-             * are set up again. we'll mimic what the "Configure Global Security" config
-             * page does
-             */
-
-            /*
-             * NOTE, Jenkins currently does not employ any sort of synchronization around
-             * their paths for updating the authorization strategy; However, with user login
-             * now driving the addition of users and their permissions, that does not seem
-             * prudent when users are logging in concurrently.
-             */
-            synchronized (USER_UPDATE_LOCK) {
-                GlobalMatrixAuthorizationStrategy existingAuthMgr = (GlobalMatrixAuthorizationStrategy) Jenkins
-                        .getInstance().getAuthorizationStrategy();
-                Set<String> usersGroups = existingAuthMgr.getGroups();
-
-                if (LOGGER.isLoggable(FINE))
-                    LOGGER.fine(String.format("updateAuthorizationStrategy: got users %s where this user is %s",
-                            usersGroups.toString(), info.getName()));
-
-                if (usersGroups.contains(matrixKey)) {
-                    // since we store username-maxrole in the auth matrix, we
-                    // can infer that since this user-role pair already exists
-                    // as a key, there is no need to update the matrix
-                    // since our permissions are still the same on the openshift
-                    // side
-                    LOGGER.info(String.format(
-                            "OpenShift OAuth: user %s, stored in the matrix as %s, based on OpenShift roles %s already exists in Jenkins",
-                            info.getName(), matrixKey, allowedRoles));
-                } else {
-                    List<PermissionGroup> permissionGroups = new ArrayList<PermissionGroup>(PermissionGroup.getAll());
-                    if (LOGGER.isLoggable(FINE))
-                        LOGGER.fine(String.format("updateAuthorizationStrategy: permissions %s",
-                                permissionGroups.toString()));
-
-                    GlobalMatrixAuthorizationStrategy newAuthMgr = null;
-                    if (existingAuthMgr instanceof ProjectMatrixAuthorizationStrategy) {
-                        newAuthMgr = new ProjectMatrixAuthorizationStrategy();
-                    } else {
-                        newAuthMgr = new GlobalMatrixAuthorizationStrategy();
-                    }
-
-                    if (newAuthMgr != null) {
-                        for (String userGroup : usersGroups) {
-                            // copy any of the other users' permissions from the
-                            // prior auth mgr to our new one
-                            for (PermissionGroup pg : permissionGroups) {
-                                for (Permission p : pg.getPermissions()) {
-                                    if (existingAuthMgr.hasPermission(userGroup, p)) {
-                                        newAuthMgr.add(p, userGroup);
-                                    }
-                                }
-                            }
-
-                        }
-
-                        // map OpenShift user based on role to Jenkins user with
-                        // analogous permissions
-                        LOGGER.info(String.format(
-                                "OpenShift OAuth: adding permissions for user %s, stored in the matrix as %s, based on OpenShift roles %s",
-                                info.getName(), matrixKey, allowedRoles));
-                        for (String role : allowedRoles) {
-                            List<Permission> perms = cfgedRolePermMap.get(role);
-                            for (Permission perm : perms) {
-                                newAuthMgr.add(perm, matrixKey);
-                            }
-                        }
-
-                        Jenkins.getInstance().setAuthorizationStrategy(newAuthMgr);
-                        try {
-                            Jenkins.getInstance().save();
-                        } catch (Throwable t) {
-                            // see https://jenkins.io/blog/2018/03/15/jep-200-lts/#after-the-upgrade
-                            // running on 2.107 ... seen intermittent errors here, even after
-                            // marking transport transient (as the xml stuff does not use standard
-                            // serialization; switch from transient instance var to static var to
-                            // attempt to avoid xml marshalling;
-                            // Always logging for now, but will monitor and bracket with a FINE
-                            // logging level check if this becomes very verbose.
-                            LOGGER.log(INFO, "updateAuthorizationStrategy", t);
-                        }
-                    }
-                }
-            }
-        }
-
+        String suffix = extractSuffix(roles);
+        UsernamePasswordAuthenticationToken token = loginUser(info, roleToPermissions, roles, authorities, suffix);
         return token;
     }
 
@@ -731,6 +588,14 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             // jenkins auth
             return new HttpRedirect(Jenkins.getInstance().getRootUrl());
         }
+    }
+
+    /**
+     * Login begins with our {@link #doCommenceLogin(String,String)} method.
+     */
+    @Override
+    public String getLoginUrl() {
+        return LOGIN_URL;
     }
 
     public String getServiceAccountDirectory() {
@@ -1023,7 +888,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         return requestFactory.buildPostRequest(url, contentAdmin);
     }
 
-    private ArrayList<String> postSAR(final Credential credential, final HttpTransport transport) throws IOException {
+    private ArrayList<String> postSubjectAccessRequest(final Credential credential, final HttpTransport transport)
+            throws IOException {
         HttpRequestFactory requestFactory = transport.createRequestFactory(new OpenShiftRequestInitializer(credential));
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + SAR_URI);
 
@@ -1125,6 +991,156 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             throw e;
         }
         throw new MalformedURLException("redirect url " + redirect + " has incorrect format");
+    }
+
+    /**
+     * logs this user in.... with the index of UsernamePasswordAuthenticationToken
+     * token being matrixKey, that will tell jenkins auth code down the line what
+     * permissions to map to, where there 3 permissions for each user possible,
+     * where the key for that permission is the username appended by -admin, -edit,
+     * or -view NOTE, if all three self-sars fail, where it has no permission
+     * entries in the jenkins auth matrix, we don't update the security ctx, and
+     * leave the user as the jenkins anonymous user; that way, a malicious user
+     * can't say create a "foo-admin" user, and get user foo's admin permission;
+     * note, if "foo-admin" has say view access, then his permission key via this
+     * token and matrixKey will be "foo-admin-view", and only have the jenkins
+     * permissions we've assigned to the view role
+     */
+    private UsernamePasswordAuthenticationToken loginUser(OpenShiftUserInfo info,
+            Map<String, List<Permission>> cfgedRolePermMap, ArrayList<String> allowedRoles,
+            GrantedAuthority[] authorities, String suffix) throws IOException, FormValidation {
+        UsernamePasswordAuthenticationToken token = null;
+        if (suffix != null) {
+            String matrixKey = info.getName() + suffix;
+            token = new UsernamePasswordAuthenticationToken(matrixKey, "", authorities);
+            SecurityContextHolder.getContext().setAuthentication(token);
+
+            User user = User.get(token.getName());
+            info.updateProfile(user);
+            // this controls the user name that is displayed atop the Jenkins
+            // browser window;
+            // we'll display the "core" user name without the admin/edit/view
+            // suffix
+            user.setFullName(info.getName());
+            user.save();
+            SecurityListener.fireAuthenticated(new OpenShiftUserDetails(token.getName(), authorities));
+
+            computeUserPermission(info, cfgedRolePermMap, allowedRoles, matrixKey);
+        }
+        return token;
+    }
+
+    /**
+     * So if you look at GlobalSecurityConfiguration and
+     * GlobalMatrixAuthorizationStrategy (including its DescriptorImpl) and the
+     * associated config.jelly files, you'll see that the AuthourizationStrategy
+     * object stored in Jenkins is *essentially* immutable (except for adds, with
+     * comments saying only to use durin contruction), and that when users
+     * manipulate the panel "Configure Global Security", new instances of
+     * Global/ProjectMatrixAuthorizationStrategy are created, where existing users
+     * are set up again. we'll mimic what the "Configure Global Security" config
+     * page does
+     */
+    private void computeUserPermission(OpenShiftUserInfo info, Map<String, List<Permission>> cfgedRolePermMap,
+            ArrayList<String> allowedRoles, String matrixKey) {
+        /*
+         * NOTE, Jenkins currently does not employ any sort of synchronization around
+         * their paths for updating the authorization strategy; However, with user login
+         * now driving the addition of users and their permissions, that does not seem
+         * prudent when users are logging in concurrently.
+         */
+        synchronized (USER_UPDATE_LOCK) {
+            GlobalMatrixAuthorizationStrategy existingAuthMgr = (GlobalMatrixAuthorizationStrategy) Jenkins
+                    .getInstance().getAuthorizationStrategy();
+            Set<String> usersGroups = existingAuthMgr.getGroups();
+
+            if (LOGGER.isLoggable(FINE))
+                LOGGER.fine(String.format("updateAuthorizationStrategy: got users %s where this user is %s",
+                        usersGroups.toString(), info.getName()));
+
+            if (usersGroups.contains(matrixKey)) {
+                // since we store username-maxrole in the auth matrix, we
+                // can infer that since this user-role pair already exists
+                // as a key, there is no need to update the matrix
+                // since our permissions are still the same on the openshift
+                // side
+                LOGGER.info(String.format(
+                        "OpenShift OAuth: user %s, stored in the matrix as %s, based on OpenShift roles %s already exists in Jenkins",
+                        info.getName(), matrixKey, allowedRoles));
+            } else {
+                List<PermissionGroup> permissionGroups = new ArrayList<PermissionGroup>(PermissionGroup.getAll());
+                if (LOGGER.isLoggable(FINE))
+                    LOGGER.fine(
+                            String.format("updateAuthorizationStrategy: permissions %s", permissionGroups.toString()));
+
+                GlobalMatrixAuthorizationStrategy newAuthMgr = null;
+                if (existingAuthMgr instanceof ProjectMatrixAuthorizationStrategy) {
+                    newAuthMgr = new ProjectMatrixAuthorizationStrategy();
+                } else {
+                    newAuthMgr = new GlobalMatrixAuthorizationStrategy();
+                }
+
+                if (newAuthMgr != null) {
+                    for (String userGroup : usersGroups) {
+                        // copy any of the other users' permissions from the
+                        // prior auth mgr to our new one
+                        for (PermissionGroup pg : permissionGroups) {
+                            for (Permission p : pg.getPermissions()) {
+                                if (existingAuthMgr.hasPermission(userGroup, p)) {
+                                    newAuthMgr.add(p, userGroup);
+                                }
+                            }
+                        }
+
+                    }
+
+                    // map OpenShift user based on role to Jenkins user with
+                    // analogous permissions
+                    LOGGER.info(String.format(
+                            "OpenShift OAuth: adding permissions for user %s, stored in the matrix as %s, based on OpenShift roles %s",
+                            info.getName(), matrixKey, allowedRoles));
+                    for (String role : allowedRoles) {
+                        List<Permission> perms = cfgedRolePermMap.get(role);
+                        for (Permission perm : perms) {
+                            newAuthMgr.add(perm, matrixKey);
+                        }
+                    }
+
+                    Jenkins.getInstance().setAuthorizationStrategy(newAuthMgr);
+                    try {
+                        Jenkins.getInstance().save();
+                    } catch (Throwable t) {
+                        // see https://jenkins.io/blog/2018/03/15/jep-200-lts/#after-the-upgrade
+                        // running on 2.107 ... seen intermittent errors here, even after
+                        // marking transport transient (as the xml stuff does not use standard
+                        // serialization; switch from transient instance var to static var to
+                        // attempt to avoid xml marshalling;
+                        // Always logging for now, but will monitor and bracket with a FINE
+                        // logging level check if this becomes very verbose.
+                        LOGGER.log(INFO, "updateAuthorizationStrategy", t);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * we append the role suffix to the name stored into Jenkins, since a given user
+     * is able to log in at varying scope/permission levels in openshift; however,
+     * for now, we make sure the display name for Jenkins does not include this
+     * suffix
+     */
+    private String extractSuffix(ArrayList<String> allowedRoles) {
+
+        String suffix = null;
+        for (String role : allowedRoles) {
+            if (suffix == null) {
+                suffix = "-" + role;
+            } else {
+                suffix = suffix + "-" + role;
+            }
+        }
+        return suffix;
     }
 
     private void mapPermissionIntoRole(Map<String, List<Permission>> permMap, ConfigMapResponse response,

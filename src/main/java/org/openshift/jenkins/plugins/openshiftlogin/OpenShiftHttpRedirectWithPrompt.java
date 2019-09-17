@@ -23,6 +23,10 @@ import org.kohsuke.stapler.StaplerResponse;
 public class OpenShiftHttpRedirectWithPrompt extends RuntimeException implements
         HttpResponse {
 
+    /**
+     * 
+     */
+    private static final long serialVersionUID = -4754515487398471884L;
     private final int statusCode;
     private final String url;
     private ArrayList<String> redirect;
