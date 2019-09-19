@@ -26,6 +26,7 @@ package org.openshift.jenkins.plugins.openshiftlogin;
 
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 import static java.net.HttpURLConnection.HTTP_OK;
+import static java.util.logging.Level.FINE;
 import static java.util.logging.Level.INFO;
 import static org.apache.commons.lang.StringUtils.isNotBlank;
 
@@ -36,7 +37,9 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.Authenticator;
 import java.net.MalformedURLException;
+import java.net.PasswordAuthentication;
 import java.net.URL;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
@@ -165,6 +168,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     // NPE issues of this not getting set through based on how this object was
     // constructed
     private static final ArrayList<String> roles = new ArrayList<String>(Arrays.asList("admin", "edit", "view"));
+
+    private static final String HTTPS_PROXY_USER = "https.proxyUser";
+
+    private static final String HTTPS_PROXY_PASSWORD = "https.proxyPassword";
 
     /**
      * Control the redirection URL for this realm. Exposed for testing.
@@ -538,6 +545,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     }
 
     private HttpTransport transportToUse(final Credential credential) {
+        initializeHttpsProxyAuthenticator();
         if (provider == null)
             return transport;
         try {
@@ -573,6 +581,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                         });
 
                 GenericUrl url = new GenericUrl(provider.token_endpoint);
+
                 HttpRequest request = requestFactory.buildHeadRequest(url);
                 request.execute().getStatusCode();
                 // most likely will not get here on vanilla head request but just in case
@@ -595,6 +604,33 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                     "OpenShift OAuth provider token endpoint failed unexpectedly using this pod's SA's certificate", t);
         }
         return transport;
+    }
+
+    /**
+     * Since Java 7 and Java 8, it is not required to set a custom Authenticator to
+     * use an authenticated HTTP proxy. However, for HTTPS proxies, this is still
+     * necessary for Basic authentication in conjunction with:
+     *
+     * -Djdk.http.auth.tunneling.disabledSchemes=""
+     * -Djdk.http.auth.proxying.disabledSchemes=""
+     *
+     * If the custom authenticator is not set using (Authenticator.setDefault()) an
+     * error: java.io.IOException: Unable to tunnel through proxy. Proxy returns
+     * "HTTP/1.1 407 Proxy Authentication Required" is thrown.
+     */
+    private void initializeHttpsProxyAuthenticator() {
+        final String username = System.getProperty(HTTPS_PROXY_USER);
+        final String password = System.getProperty(HTTPS_PROXY_PASSWORD);
+        LOGGER.log(INFO, "Checking if HTTPS proxy initialization is required ... ");
+        if (username != null && password != null) {
+            LOGGER.log(FINE, HTTPS_PROXY_USER + " or " + HTTPS_PROXY_PASSWORD + " found in system properties...");
+            LOGGER.log(INFO, "Creating basic authenticator for HTTPS proxy auth");
+            Authenticator.setDefault(new Authenticator() {
+                public PasswordAuthentication getPasswordAuthentication() {
+                    return (new PasswordAuthentication(username, password.toCharArray()));
+                }
+            });
+        }
     }
 
     private boolean useProviderOAuthEndpoint(final Credential credential) {
