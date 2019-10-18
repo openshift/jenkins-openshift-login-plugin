@@ -29,6 +29,7 @@ import static java.net.HttpURLConnection.HTTP_OK;
 import static java.util.logging.Level.FINE;
 import static java.util.logging.Level.INFO;
 import static org.apache.commons.lang.StringUtils.isNotBlank;
+import static org.openshift.jenkins.plugins.openshiftlogin.CredentialHttpRequestInitializer.JSON_FACTORY;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -36,10 +37,8 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.Authenticator;
 import java.net.MalformedURLException;
-import java.net.PasswordAuthentication;
 import java.net.URL;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
@@ -58,13 +57,9 @@ import javax.net.ssl.SSLHandshakeException;
 import javax.servlet.ServletException;
 
 import org.acegisecurity.Authentication;
-import org.acegisecurity.AuthenticationException;
-import org.acegisecurity.AuthenticationManager;
-import org.acegisecurity.BadCredentialsException;
 import org.acegisecurity.GrantedAuthority;
 import org.acegisecurity.context.SecurityContextHolder;
 import org.acegisecurity.providers.UsernamePasswordAuthenticationToken;
-import org.acegisecurity.providers.anonymous.AnonymousAuthenticationToken;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.Header;
 import org.kohsuke.stapler.HttpRedirect;
@@ -78,17 +73,12 @@ import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.ClientParametersAuthentication;
 import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.auth.openidconnect.IdTokenResponse;
 import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpContent;
 import com.google.api.client.http.HttpRequest;
 import com.google.api.client.http.HttpRequestFactory;
-import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.JsonFactory;
-import com.google.api.client.json.JsonObjectParser;
-import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.SecurityUtils;
 
 import hudson.EnvVars;
@@ -108,7 +98,6 @@ import hudson.security.PermissionGroup;
 import hudson.security.ProjectMatrixAuthorizationStrategy;
 import hudson.security.SecurityRealm;
 import hudson.util.FormValidation;
-import hudson.util.HttpResponses;
 import hudson.util.Secret;
 import jenkins.model.Jenkins;
 import jenkins.security.SecurityListener;
@@ -155,11 +144,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private static final String SCHEME_SEPARATOR = "://";
     private static final String PORT_SEPARATOR = ":";
     public static final String SECURITY_REALM_FINISH_LOGIN = "/securityRealm/finishLogin";
-    /**
-     * Global instance of the JSON factory.
-     */
-    private static final JsonFactory JSON_FACTORY = new JacksonFactory();
-
+  
     static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
 
     private static final Object USER_UPDATE_LOCK = new Object();
@@ -283,7 +268,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             String clientId, String clientSecret, String redirectURL) throws IOException, GeneralSecurityException {
         HttpTransport transport = HTTP_TRANSPORT;
 
-        if (LOGGER.isLoggable(Level.FINE))
+        if (LOGGER.isLoggable(FINE))
             LOGGER.fine(String.format(
                     "ctor: incoming args sa dir %s sa name %s svr prefix %s client id %s client secret %s redirectURL %s",
                     serviceAccountDirectory, serviceAccountName, serverPrefix, clientId, clientSecret, redirectURL));
@@ -530,12 +515,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
     private OpenShiftProviderInfo getOpenShiftOAuthProvider(final Credential credential, final HttpTransport transport)
             throws IOException {
-        HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
-            public void initialize(HttpRequest request) throws IOException {
-                credential.initialize(request);
-                request.setParser(new JsonObjectParser(JSON_FACTORY));
-            }
-        });
+        HttpRequestFactory requestFactory = transport.createRequestFactory(new CredentialHttpRequestInitializer(credential));
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + OAUTH_PROVIDER_URI);
 
         HttpRequest request = requestFactory.buildGetRequest(url);
@@ -549,12 +529,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         if (provider == null)
             return transport;
         try {
-            HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
-                public void initialize(HttpRequest request) throws IOException {
-                    credential.initialize(request);
-                    request.setParser(new JsonObjectParser(JSON_FACTORY));
-                }
-            });
+            HttpRequestFactory requestFactory = transport.createRequestFactory(new CredentialHttpRequestInitializer(credential));
             GenericUrl url = new GenericUrl(provider.token_endpoint);
             HttpRequest request = requestFactory.buildHeadRequest(url);
             request.execute().getStatusCode();
@@ -572,13 +547,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                 }
 
                 HttpRequestFactory requestFactory = jvmDefaultKeystoreTransport
-                        .createRequestFactory(new HttpRequestInitializer() {
-
-                            public void initialize(HttpRequest request) throws IOException {
-                                credential.initialize(request);
-                                request.setParser(new JsonObjectParser(JSON_FACTORY));
-                            }
-                        });
+                        .createRequestFactory(new CredentialHttpRequestInitializer(credential));
 
                 GenericUrl url = new GenericUrl(provider.token_endpoint);
 
@@ -625,11 +594,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         if (username != null && password != null) {
             LOGGER.log(FINE, HTTPS_PROXY_USER + " or " + HTTPS_PROXY_PASSWORD + " found in system properties...");
             LOGGER.log(INFO, "Creating basic authenticator for HTTPS proxy auth");
-            Authenticator.setDefault(new Authenticator() {
-                public PasswordAuthentication getPasswordAuthentication() {
-                    return (new PasswordAuthentication(username, password.toCharArray()));
-                }
-            });
+            Authenticator.setDefault(new BasicAuthenticator(username, password));
         }
     }
 
@@ -638,12 +603,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             return false;
         try {
             GenericUrl url = new GenericUrl(defaultedServerPrefix + "/version");
-            HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
-                public void initialize(HttpRequest request) throws IOException {
-                    credential.initialize(request);
-                    request.setParser(new JsonObjectParser(JSON_FACTORY));
-                }
-            });
+            HttpRequestFactory requestFactory = transport.createRequestFactory(new CredentialHttpRequestInitializer(credential));
             HttpRequest request = requestFactory.buildGetRequest(url);
             com.google.api.client.http.HttpResponse response = request.execute();
             int rc = response.getStatusCode();
@@ -685,12 +645,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
     private OpenShiftUserInfo getOpenShiftUserInfo(final Credential credential, final HttpTransport transport)
             throws IOException {
-        HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
-            public void initialize(HttpRequest request) throws IOException {
-                credential.initialize(request);
-                request.setParser(new JsonObjectParser(JSON_FACTORY));
-            }
-        });
+        HttpRequestFactory requestFactory = transport.createRequestFactory(new CredentialHttpRequestInitializer(credential));
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + USER_URI);
 
         HttpRequest request = requestFactory.buildGetRequest(url);
@@ -709,40 +664,12 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
     private HttpRequest buildPostSARRequest(HttpRequestFactory requestFactory, GenericUrl url, final String json)
             throws IOException {
-        HttpContent contentAdmin = new HttpContent() {
-
-            @Override
-            public long getLength() throws IOException {
-                return (long) (json.getBytes().length);
-            }
-
-            @Override
-            public String getType() {
-                return "application/json";
-            }
-
-            @Override
-            public boolean retrySupported() {
-                return false;
-            }
-
-            @Override
-            public void writeTo(OutputStream out) throws IOException {
-                out.write(json.getBytes());
-                out.flush();
-            }
-
-        };
+        HttpContent contentAdmin = new SARRequestHttpContent(json);
         return requestFactory.buildPostRequest(url, contentAdmin);
     }
 
     private ArrayList<String> postSAR(final Credential credential, final HttpTransport transport) throws IOException {
-        HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
-            public void initialize(HttpRequest request) throws IOException {
-                credential.initialize(request);
-                request.setParser(new JsonObjectParser(JSON_FACTORY));
-            }
-        });
+        HttpRequestFactory requestFactory = transport.createRequestFactory(new CredentialHttpRequestInitializer(credential));
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + SAR_URI);
 
         ArrayList<String> allowedRoles = new ArrayList<String>();
@@ -790,12 +717,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
         final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
                 .setAccessToken(getDefaultedClientSecret().getPlainText());
-        HttpRequestFactory requestFactory = transport.createRequestFactory(new HttpRequestInitializer() {
-            public void initialize(HttpRequest request) throws IOException {
-                credential.initialize(request);
-                request.setParser(new JsonObjectParser(JSON_FACTORY));
-            }
-        });
+        HttpRequestFactory requestFactory = transport.createRequestFactory(new CredentialHttpRequestInitializer(credential));
         GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + String.format(CONFIG_MAP_URI, namespace));
         HttpRequest request = null;
         ConfigMapResponse response = null;
@@ -893,13 +815,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
      */
     @Override
     public SecurityComponents createSecurityComponents() {
-        return new SecurityComponents(new AuthenticationManager() {
-            public Authentication authenticate(Authentication authentication) throws AuthenticationException {
-                if (authentication instanceof AnonymousAuthenticationToken)
-                    return authentication;
-                throw new BadCredentialsException("Unexpected authentication type: " + authentication);
-            }
-        });
+        return new SecurityComponents(new AnonymousAuthenticationManager());
     }
 
     protected OAuthSession newOAuthSession(String from, final String redirectOnFinish) throws MalformedURLException {
@@ -940,27 +856,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         final OpenShiftOAuth2SecurityRealm secRealm = this;
         final String url = buildOAuthRedirectUrl(redirectOnFinish);
 
-        return new OAuthSession(flow, from, url) {
-            @Override
-            public HttpResponse onSuccess(String authorizationCode) {
-                try {
-                    IdTokenResponse response = IdTokenResponse
-                            .execute(flow.newTokenRequest(authorizationCode).setRedirectUri(url));
-                    final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
-                            .setFromTokenResponse(response);
-                    this.setCredential(credential);
-                    secRealm.updateAuthorizationStrategy(credential);
-
-                    return new HttpRedirect(redirectOnFinish);
-
-                } catch (Throwable e) {
-                    if (LOGGER.isLoggable(Level.FINE))
-                        LOGGER.log(Level.FINE, "onSuccess", e);
-                    return HttpResponses.error(500, e);
-                }
-            }
-
-        };
+        return new BearerTokenOAuthSession(flow, from, url, redirectOnFinish, url, flow, secRealm);
     }
 
     public UsernamePasswordAuthenticationToken updateAuthorizationStrategy(Credential credential)
@@ -1102,7 +998,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
                             // attempt to avoid xml marshalling;
                             // Always logging for now, but will monitor and bracket with a FINE
                             // logging level check if this becomes very verbose.
-                            LOGGER.log(Level.INFO, "updateAuthorizationStrategy", t);
+                            LOGGER.log(INFO, "updateAuthorizationStrategy", t);
                         }
                     }
                 }
@@ -1229,6 +1125,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
         // interim.
         return req.getRequestURL().toString().replace(LOGOUT, EMPTY_STRING);
     }
+   
+   
 
     @Extension
     public static final class DescriptorImpl extends Descriptor<SecurityRealm> {
