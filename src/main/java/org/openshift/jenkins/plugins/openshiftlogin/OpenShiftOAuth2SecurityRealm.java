@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -143,6 +144,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private static final String HTTP_SCHEME = "http";
     private static final String SCHEME_SEPARATOR = "://";
     private static final String PORT_SEPARATOR = ":";
+    private final static Locale DEFAULT_LOCALE_PERMISSION = Locale.US;
     public static final String SECURITY_REALM_FINISH_LOGIN = "/securityRealm/finishLogin";
   
     static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
@@ -700,20 +702,20 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
 
     private Map<String, List<Permission>> getRoleToPermissionMap(final HttpTransport transport) {
         // set up default
-        Map<String, List<Permission>> permMap = new HashMap<String, List<Permission>>();
+        Map<String, List<Permission>> rolesToPermissionsMap = new HashMap<String, List<Permission>>();
         ArrayList<Permission> viewPerms = new ArrayList<Permission>(
                 Arrays.asList(Hudson.READ, Item.READ, Item.DISCOVER, CredentialsProvider.VIEW));
-        permMap.put("view", viewPerms);
+        rolesToPermissionsMap.put("view", viewPerms);
         ArrayList<Permission> editPerms = new ArrayList<Permission>(viewPerms);
         editPerms.addAll(new ArrayList<Permission>(Arrays.asList(Item.BUILD, Item.CONFIGURE, Item.CREATE, Item.DELETE,
                 Item.CANCEL, Item.WORKSPACE, SCM.TAG, Jenkins.RUN_SCRIPTS)));
-        permMap.put("edit", editPerms);
+        rolesToPermissionsMap.put("edit", editPerms);
         ArrayList<Permission> adminPerms = new ArrayList<Permission>(editPerms);
         adminPerms.addAll(new ArrayList<Permission>(
                 Arrays.asList(Computer.CONFIGURE, Computer.DELETE, Hudson.ADMINISTER, Hudson.READ, Run.DELETE,
                         Run.UPDATE, View.CONFIGURE, View.CREATE, View.DELETE, CredentialsProvider.CREATE,
                         CredentialsProvider.UPDATE, CredentialsProvider.DELETE, CredentialsProvider.MANAGE_DOMAINS)));
-        permMap.put("admin", adminPerms);
+        rolesToPermissionsMap.put("admin", adminPerms);
 
         final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
                 .setAccessToken(getDefaultedClientSecret().getPlainText());
@@ -729,79 +731,75 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
             LOGGER.info(prefix + " could not find the openshift-jenkins-login-plugin-config config map in namespace "
                     + namespace + " so the default permission mapping will be used");
             LOGGER.log(Level.FINE, "getRoleToPermissionMap", e);
-            return permMap;
+            return rolesToPermissionsMap;
         }
 
         if (response == null || response.data == null || response.data.size() == 0) {
             LOGGER.info(prefix + " did not see the openshift-jenkins-login-plugin-config config map in namespace "
                     + namespace + " so the default permission mapping will be used");
-            return permMap;
+            return rolesToPermissionsMap;
         }
 
-        permMap.clear();
+        rolesToPermissionsMap.clear();
         List<Permission> permissionsInSystem = Permission.getAll();
         for (Entry<String, String> entry : response.data.entrySet()) {
-            String permStr = entry.getKey();
+            String permissionAsString = entry.getKey();
 
-            String[] permStrArr = permStr.trim().split("-");
-            if (permStrArr == null || permStrArr.length != 2) {
-                LOGGER.info(prefix + " ignore permission string " + permStr
+            String[] parsedPermission = permissionAsString.trim().split("-");
+            if (parsedPermission == null || parsedPermission.length != 2) {
+                LOGGER.info(prefix + " ignore permission string " + permissionAsString
                         + " since if is not of the form <permGroupId>-<permId>");
                 continue;
             }
 
-            Permission perm = null;
-            for (Permission permInSys : permissionsInSystem) {
-                LOGGER.fine("permInSys.group.title.toString().trim() " + permInSys.group.title.toString().trim());
-                LOGGER.fine("permStrArr[0].trim() " + permStrArr[0].trim());
-                LOGGER.fine("permInSys.name.trim() " + permInSys.name.trim());
-                LOGGER.fine("permStrArr[1].trim() " + permStrArr[1].trim());
-                if (permInSys.group.title.toString().trim().equalsIgnoreCase(permStrArr[0].trim())
-                        && permInSys.name.trim().equalsIgnoreCase(permStrArr[1].trim())) {
-                    perm = permInSys;
-                    LOGGER.info(
-                            prefix + " matching configured permission " + permStr + " to Jenkins permission " + perm);
+            Permission permission = null;
+            for (Permission systemPermission : permissionsInSystem) {
+                String systemPermissionString = systemPermission.group.title.toString(DEFAULT_LOCALE_PERMISSION).trim();
+                String permissionGroupId = parsedPermission[0].trim();
+                String permissionName = systemPermission.name.trim();
+                String permissionId = parsedPermission[1].trim();
+                LOGGER.fine("Permission in system (forced in en_US locale)" + systemPermissionString + ", Permission Group ID" + permissionGroupId);
+                LOGGER.fine("Permission Name " + permissionName + ", Permission ID " + permissionId);
+                if (systemPermissionString.equalsIgnoreCase(permissionGroupId) && permissionName.equalsIgnoreCase(permissionId)) {
+                    permission = systemPermission;
+                    LOGGER.info( prefix + " matching configured permission " + permissionAsString + " to Jenkins permission " + permission);
                     break;
                 }
             }
-            if (perm == null) {
-                LOGGER.warning(prefix + " could not find permission " + permStr
-                        + " in Jenkins list of all available permissions");
+            if (permission == null) {
+                LOGGER.warning(prefix + " could not find permission " + permissionAsString + " in Jenkins list of all available permissions");
                 continue;
             }
-
-            String roleList = entry.getValue();
-            if (roleList == null) {
-                LOGGER.warning("No roles specified for permission " + permStr + " in login plugin config map");
+            String rolesList = entry.getValue();
+            if (rolesList == null) {
+                LOGGER.warning("No roles specified for permission " + permissionAsString + " in login plugin config map");
                 continue;
             }
-            String[] permRoles = roleList.split(",");
-            if (permRoles == null || permRoles.length == 0) {
-                LOGGER.warning(
-                        "No roles specified for permission " + permStr + " in login plugin config map: " + roleList);
+            String[] permissionRoles = rolesList.split(",");
+            if (permissionRoles == null || permissionRoles.length == 0) {
+                LOGGER.warning( "No roles specified for permission " + permissionAsString + " in login plugin config map: " + rolesList);
             }
-
-            for (String role : permRoles) {
+            for (String role : permissionRoles) {
                 // Permission class implements equals and hashCode
-                List<Permission> permList = permMap.get(role);
-                if (permList == null) {
-                    permList = new ArrayList<Permission>();
-                    permMap.put(role, permList);
-                }
-                if (!permList.contains(perm)) {
-                    LOGGER.info(prefix + " adding permission " + permStr + " for role " + role);
-                    permList.add(perm);
+                List<Permission> permissions = rolesToPermissionsMap.get(role);
+                if (permissions == null) {
+                    permissions = new ArrayList<Permission>();
+                    rolesToPermissionsMap.put(role, permissions);
+                } 
+                if (!permissions.contains(permission)) {
+                    LOGGER.info(prefix + " adding permission " + permissionAsString + " for role " + role);
+                    permissions.add(permission);
                 }
             }
         }
 
         roles.clear();
-        for (String key : permMap.keySet()) {
+        for (String key : rolesToPermissionsMap.keySet()) {
             if (!roles.contains(key))
                 roles.add(key);
         }
         LOGGER.info(prefix + " using role list " + roles);
-        return permMap;
+        return rolesToPermissionsMap;
     }
 
     /**
