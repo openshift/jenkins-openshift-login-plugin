@@ -37,6 +37,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.Serializable;
 import java.net.Authenticator;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -109,7 +110,7 @@ import jenkins.security.SecurityListener;
  *
  */
 @SuppressFBWarnings
-public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
+public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Serializable{
     private static final String EMPTY_STRING = "";
 
     static final Logger LOGGER = Logger.getLogger(OpenShiftOAuth2SecurityRealm.class.getName());

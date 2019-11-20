@@ -35,12 +35,14 @@ import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.auth.openidconnect.IdTokenResponse;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.util.HttpResponses;
 
 public final class BearerTokenOAuthSession extends OAuthSession {
     static final Logger LOGGER = Logger.getLogger(BearerTokenOAuthSession.class.getName());
     private final String redirectOnFinish;
     private final String url;
+    @SuppressFBWarnings
     private final AuthorizationCodeFlow flow;
     private final OpenShiftOAuth2SecurityRealm secRealm;
 
