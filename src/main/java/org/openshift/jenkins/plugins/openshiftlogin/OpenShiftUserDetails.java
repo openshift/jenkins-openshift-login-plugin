@@ -27,6 +27,9 @@ package org.openshift.jenkins.plugins.openshiftlogin;
 import org.acegisecurity.GrantedAuthority;
 import org.acegisecurity.userdetails.UserDetails;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
+@SuppressFBWarnings
 public class OpenShiftUserDetails implements UserDetails {
     
     private String name;
