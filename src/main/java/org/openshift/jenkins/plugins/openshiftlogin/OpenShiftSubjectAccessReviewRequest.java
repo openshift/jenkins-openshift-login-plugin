@@ -29,6 +29,9 @@ import java.util.List;
 
 import com.google.api.client.util.Key;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
+@SuppressFBWarnings
 public class OpenShiftSubjectAccessReviewRequest {
 
     public static final String SUBJECT_ACCESS_REVIEW = "SubjectAccessReview";

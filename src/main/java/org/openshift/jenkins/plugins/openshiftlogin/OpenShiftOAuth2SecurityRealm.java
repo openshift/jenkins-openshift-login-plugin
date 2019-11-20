@@ -82,6 +82,7 @@ import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.util.SecurityUtils;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.EnvVars;
 import hudson.Extension;
 import hudson.Util;
@@ -107,6 +108,7 @@ import jenkins.security.SecurityListener;
  * Login with OpenShift using OpenID Connect / OAuth 2
  *
  */
+@SuppressFBWarnings
 public class OpenShiftOAuth2SecurityRealm extends SecurityRealm {
     private static final String EMPTY_STRING = "";
 
