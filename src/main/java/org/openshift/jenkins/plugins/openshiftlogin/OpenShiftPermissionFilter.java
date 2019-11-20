@@ -28,6 +28,9 @@ import hudson.EnvVars;
 import hudson.model.User;
 import hudson.security.SecurityRealm;
 
+import static java.util.logging.Level.SEVERE;
+import static org.openshift.jenkins.plugins.openshiftlogin.OAuthSession.SESSION_NAME;
+
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -84,18 +87,16 @@ public class OpenShiftPermissionFilter implements Filter {
             + "If operating from a browser, provide your user credentials when solicited by the OpenShift login page.  Otherwise, supply as a part of any HTTP requests you generate a HTTP Authorization Bearer header\n"
             + "containing a token that correlates to your user credentials.\n";
 
-    // the Jenkins crazy use of constructors vs. introspection / field setting
-    // means
-    // that after initial bringup, but following subsequent Jenkins restarts, we
-    // have
-    // to re-add our filter to the dynamic filter list Jenkins provides. We use
-    // this
-    // flag to track that (as init will be called when we add the filter); mark
-    // as transient
-    // so this is not persisted across restarts
+    /*
+     * the Jenkins crazy use of constructors vs. introspection / field setting means
+     * that after initial bringup, but following subsequent Jenkins restarts, we
+     * have to re-add our filter to the dynamic filter list Jenkins provides. We use
+     * this flag to track that (as init will be called when we add the filter); mark
+     * as transient so this is not persisted across restarts
+     */
     transient boolean initCalled = false;
 
-    class BearerCacheEntry {
+    static class BearerCacheEntry {
         long lastCheck;
         UsernamePasswordAuthenticationToken token;
     }
@@ -139,34 +140,23 @@ public class OpenShiftPermissionFilter implements Filter {
             if (s != null) {
 
                 OAuthSession oauth = (OAuthSession) s
-                        .getAttribute(OAuthSession.SESSION_NAME);
+                        .getAttribute(SESSION_NAME);
                 if (oauth != null && oauth.getCredential() != null) {
                     try {
-                        Long lastPermissionPoll = (Long) s
-                                .getAttribute(OAuthSession.SESSION_NAME
-                                        + LAST_SELF_SAR_POLL_TIME);
+                        Long lastPermissionPoll = (Long) s.getAttribute(SESSION_NAME + LAST_SELF_SAR_POLL_TIME);
                         if (lastPermissionPoll == null) {
-                            lastPermissionPoll = new Long(
-                                    System.currentTimeMillis());
-                            s.setAttribute(OAuthSession.SESSION_NAME
-                                    + LAST_SELF_SAR_POLL_TIME,
-                                    new Long(System.currentTimeMillis()));
+                            lastPermissionPoll = System.currentTimeMillis();
+                            s.setAttribute(SESSION_NAME + LAST_SELF_SAR_POLL_TIME, System.currentTimeMillis());
                         }
 
                         if (updated
-                                || (System.currentTimeMillis()
-                                        - lastPermissionPoll.longValue() > (interval * 1000))) {
-                            OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins
-                                    .getInstance().getSecurityRealm();
-                            secRealm.updateAuthorizationStrategy(oauth
-                                    .getCredential());
-                            s.setAttribute(OAuthSession.SESSION_NAME
-                                    + LAST_SELF_SAR_POLL_TIME,
-                                    new Long(System.currentTimeMillis()));
+                                || (System.currentTimeMillis() - lastPermissionPoll.longValue() > (interval * 1000))) {
+                            OpenShiftOAuth2SecurityRealm secRealm = (OpenShiftOAuth2SecurityRealm) Jenkins.getInstance().getSecurityRealm();
+                            secRealm.updateAuthorizationStrategy(oauth.getCredential());
+                            s.setAttribute(SESSION_NAME + LAST_SELF_SAR_POLL_TIME, System.currentTimeMillis());
                         }
                     } catch (Throwable t) {
-                        OpenShiftOAuth2SecurityRealm.LOGGER.log(Level.SEVERE,
-                                "filter", t);
+                        OpenShiftOAuth2SecurityRealm.LOGGER.log(SEVERE, "filter", t);
                     }
                 }
             } else if (Jenkins.getInstance().getSecurityRealm() instanceof OpenShiftOAuth2SecurityRealm) {
@@ -201,8 +191,7 @@ public class OpenShiftPermissionFilter implements Filter {
                                 if (updated || firstTime
                                         || System.currentTimeMillis()
                                                 - entry.lastCheck > (interval * 1000)) {
-                                    entry.lastCheck = new Long(
-                                            System.currentTimeMillis());
+                                    entry.lastCheck =  System.currentTimeMillis();
                                     final Credential credential = new Credential(
                                             BearerToken
                                                     .authorizationHeaderAccessMethod())
