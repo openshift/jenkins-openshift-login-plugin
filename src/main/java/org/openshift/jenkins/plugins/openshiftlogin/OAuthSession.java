@@ -29,6 +29,7 @@ import com.google.api.client.auth.oauth2.AuthorizationCodeRequestUrl;
 import com.google.api.client.auth.oauth2.AuthorizationCodeResponseUrl;
 import com.google.api.client.auth.oauth2.Credential;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.EnvVars;
 import hudson.remoting.Base64;
 import hudson.util.HttpResponses;
@@ -39,6 +40,7 @@ import org.kohsuke.stapler.Stapler;
 import org.kohsuke.stapler.StaplerRequest;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.UUID;
 
 /**
@@ -46,9 +48,10 @@ import java.util.UUID;
  *
  * Verifies the validity of the response by comparing the state.
  */
-public abstract class OAuthSession {
+public abstract class OAuthSession implements Serializable{
     private static final String OPENSHIFT_ENABLE_REDIRECT_PROMPT = "OPENSHIFT_ENABLE_REDIRECT_PROMPT";
     private final AuthorizationCodeFlow flow;
+    @SuppressFBWarnings
     private final String uuid = Base64.encode(
             UUID.randomUUID().toString().getBytes()).substring(0, 20);
     /**

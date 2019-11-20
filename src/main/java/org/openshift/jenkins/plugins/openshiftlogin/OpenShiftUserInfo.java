@@ -25,6 +25,8 @@
 package org.openshift.jenkins.plugins.openshiftlogin;
 
 import com.google.api.client.util.Key;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
 import hudson.model.User;
 import hudson.model.UserProperty;
@@ -88,6 +90,7 @@ public class OpenShiftUserInfo extends UserProperty {
         }
 
         @Override
+        @SuppressFBWarnings
         public String getDisplayName() {
             return null;
         }

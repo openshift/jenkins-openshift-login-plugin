@@ -1,5 +1,7 @@
 package org.openshift.jenkins.plugins.openshiftlogin;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -14,7 +16,7 @@ public final class SARRequestHttpContent implements HttpContent {
 
     @Override
     public long getLength() throws IOException {
-        return (long) (json.getBytes().length);
+        return (long) (json.getBytes(UTF_8).length);
     }
 
     @Override
@@ -29,7 +31,7 @@ public final class SARRequestHttpContent implements HttpContent {
 
     @Override
     public void writeTo(OutputStream out) throws IOException {
-        out.write(json.getBytes());
+        out.write(json.getBytes(UTF_8));
         out.flush();
     }
 }
