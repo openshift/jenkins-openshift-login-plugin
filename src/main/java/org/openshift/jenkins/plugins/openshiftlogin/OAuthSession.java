@@ -24,6 +24,17 @@
  */
 package org.openshift.jenkins.plugins.openshiftlogin;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.UUID;
+
+import org.kohsuke.stapler.HttpRedirect;
+import org.kohsuke.stapler.HttpResponse;
+import org.kohsuke.stapler.Stapler;
+import org.kohsuke.stapler.StaplerRequest;
+
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.AuthorizationCodeRequestUrl;
 import com.google.api.client.auth.oauth2.AuthorizationCodeResponseUrl;
@@ -34,15 +45,6 @@ import hudson.EnvVars;
 import hudson.remoting.Base64;
 import hudson.util.HttpResponses;
 
-import org.kohsuke.stapler.HttpRedirect;
-import org.kohsuke.stapler.HttpResponse;
-import org.kohsuke.stapler.Stapler;
-import org.kohsuke.stapler.StaplerRequest;
-
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.UUID;
-
 /**
  * The state of the OAuth request.
  *
@@ -51,9 +53,7 @@ import java.util.UUID;
 public abstract class OAuthSession implements Serializable{
     private static final String OPENSHIFT_ENABLE_REDIRECT_PROMPT = "OPENSHIFT_ENABLE_REDIRECT_PROMPT";
     private final AuthorizationCodeFlow flow;
-    @SuppressFBWarnings
-    private final String uuid = Base64.encode(
-            UUID.randomUUID().toString().getBytes()).substring(0, 20);
+    private final String uuid = Base64.encode(UUID.randomUUID().toString().getBytes(UTF_8)).substring(0, 20);
     /**
      * The url the user was trying to navigate to.
      */
