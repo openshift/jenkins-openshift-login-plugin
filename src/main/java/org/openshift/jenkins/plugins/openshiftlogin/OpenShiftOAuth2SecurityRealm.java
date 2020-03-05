@@ -77,6 +77,7 @@ import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.ClientParametersAuthentication;
 import com.google.api.client.auth.oauth2.Credential;
+import com.google.api.client.auth.oauth2.Credential.AccessMethod;
 import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpContent;
 import com.google.api.client.http.HttpRequest;
@@ -624,7 +625,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             if (version != null ) { 
                 boolean isOpenShift3Cluster = version.isOpenShift3Cluster();
                 LOGGER.info( "Now checking if we are on an OpenShift3 cluster and the answer is:  " + isOpenShift3Cluster);
-                return isOpenShift3Cluster;
+                // For now, this will always return true if "version" is not null, basically if we are in OpenShift
+                //TODO check if we can just return true
+                return isOpenShift3Cluster || version.isOpenShift4Cluster();
             }
         } catch (Throwable t) {
             LOGGER.log(Level.INFO, "Failed to get version attempt failed", t);
@@ -828,21 +831,29 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             asu = provider.authorization_endpoint;
             transportForThisRequest = transportToUse(credential);
         } else {
-            LOGGER.info("OpenShift OAuth using the OpenShift Jenkins Login Plugin default for the OAuth endpoints");
+            LOGGER.warning("OpenShift OAuth will use the OpenShift Jenkins Login Plugin default for the OAuth endpoints");
         }
+        
         final GenericUrl tokenServerURL = tsu;
         final String authorizationServerURL = asu;
 
-        final AuthorizationCodeFlow flow = new AuthorizationCodeFlow.Builder(BearerToken.queryParameterAccessMethod(),
-                transportForThisRequest, JSON_FACTORY, tokenServerURL,
-                new ClientParametersAuthentication(getDefaultedClientId(), accessToken),
-                getDefaultedClientId(), authorizationServerURL).setScopes(Arrays.asList(SCOPE_INFO, SCOPE_CHECK_ACCESS))
-                        .build();
-
+        String defaultedClientId = getDefaultedClientId();
+        ClientParametersAuthentication clientAuthentication = new ClientParametersAuthentication(defaultedClientId, accessToken);
+        List<String> scopes = Arrays.asList(SCOPE_INFO, SCOPE_CHECK_ACCESS);
+        AccessMethod queryParameters = BearerToken.queryParameterAccessMethod();
+        LOGGER.info(format("Performing OpenShift AuthorizationCodeFlow using: tokenServerURL=[%s]", tokenServerURL.toString()));
+        LOGGER.info(format("AuthorizationCodeFlow using : queryParameters=[%s], transport=[%s], ", queryParameters, transportForThisRequest));
+        LOGGER.info(format("AuthorizationCodeFlow using : clientAuthentication=[%s], clientId=[%s], ", clientAuthentication, defaultedClientId));
+        LOGGER.info(format("AuthorizationCodeFlow using : authorizationServerURL=[%s], ", authorizationServerURL));
+        final AuthorizationCodeFlow flow = new AuthorizationCodeFlow.Builder(queryParameters, transportForThisRequest, 
+                                                                             JSON_FACTORY, tokenServerURL, clientAuthentication, 
+                                                                             defaultedClientId, authorizationServerURL
+                                                                             ).setScopes(scopes).build();
         final OpenShiftOAuth2SecurityRealm secRealm = this;
         final String url = buildOAuthRedirectUrl(redirectOnFinish);
-
-        return new BearerTokenOAuthSession(flow, from, url, redirectOnFinish, url, flow, secRealm);
+        BearerTokenOAuthSession bearerTokenOAuthSession = new BearerTokenOAuthSession(flow, from, url, redirectOnFinish, url, flow, secRealm);
+        LOGGER.info(String.format("The created BearerTokenOAuthSession  is  [%s]", bearerTokenOAuthSession.toString()));
+        return bearerTokenOAuthSession;
     }
 
     public UsernamePasswordAuthenticationToken updateAuthorizationStrategy(Credential credential)
