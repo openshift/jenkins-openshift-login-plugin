@@ -31,6 +31,7 @@ import org.kohsuke.stapler.HttpRedirect;
 import org.kohsuke.stapler.HttpResponse;
 
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
+import com.google.api.client.auth.oauth2.AuthorizationCodeTokenRequest;
 import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.auth.openidconnect.IdTokenResponse;
@@ -58,8 +59,9 @@ public final class BearerTokenOAuthSession extends OAuthSession {
     @Override
     public HttpResponse onSuccess(String authorizationCode) {
         try {
-            IdTokenResponse response = IdTokenResponse
-                    .execute(flow.newTokenRequest(authorizationCode).setRedirectUri(url));
+            LOGGER.info("");
+            AuthorizationCodeTokenRequest tokenRequest = flow.newTokenRequest(authorizationCode).setRedirectUri(url);
+            IdTokenResponse response = IdTokenResponse.execute(tokenRequest);
             final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
                     .setFromTokenResponse(response);
             this.setCredential(credential);
@@ -68,8 +70,8 @@ public final class BearerTokenOAuthSession extends OAuthSession {
             return new HttpRedirect(redirectOnFinish);
 
         } catch (Throwable e) {
-            if (LOGGER.isLoggable(Level.FINE))
-                LOGGER.log(Level.FINE, "onSuccess", e);
+            if (LOGGER.isLoggable(Level.SEVERE))
+                LOGGER.log(Level.SEVERE, "onSuccess", e);
             return HttpResponses.error(500, e);
         }
     }

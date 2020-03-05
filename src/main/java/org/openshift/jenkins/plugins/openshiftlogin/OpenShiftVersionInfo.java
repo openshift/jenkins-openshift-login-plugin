@@ -24,6 +24,8 @@
  */
 package org.openshift.jenkins.plugins.openshiftlogin;
 
+import java.util.logging.Logger;
+
 import com.google.api.client.util.Key;
 
 /**
@@ -32,19 +34,12 @@ import com.google.api.client.util.Key;
  * This is from https://SERVER/version
  */
 /*
- * {
-  "major": "1",
-  "minor": "11+",
-  "gitVersion": "v1.11.0+d4cacc0",
-  "gitCommit": "d4cacc0",
-  "gitTreeState": "clean",
-  "buildDate": "2019-05-02T11:52:09Z",
-  "goVersion": "go1.10.8",
-  "compiler": "gc",
-  "platform": "linux/amd64"
-}
+ * { "major": "1", "minor": "11+", "gitVersion": "v1.11.0+d4cacc0", "gitCommit":
+ * "d4cacc0", "gitTreeState": "clean", "buildDate": "2019-05-02T11:52:09Z",
+ * "goVersion": "go1.10.8", "compiler": "gc", "platform": "linux/amd64" }
  */
 public class OpenShiftVersionInfo {
+    static final Logger LOGGER = Logger.getLogger(OpenShiftVersionInfo.class.getName());
 
     public OpenShiftVersionInfo() {
 
@@ -61,8 +56,40 @@ public class OpenShiftVersionInfo {
 
     @Override
     public String toString() {
-        return "OpenShiftVersionInfo: major: " + major + " minor: "
-                + minor + " gitVersion: " + gitVersion;
+        return "OpenShiftVersionInfo: major: " + major + " minor: " + minor + " gitVersion: " + gitVersion;
+    }
+
+    
+    public boolean isOpenShift3Cluster() {
+        return !isOpenShift4Cluster();
+    }
+    
+    
+    public boolean isOpenShift4Cluster() {
+        if (this.major != null && this.major.equals("1")) {
+            if (this.minor.length() > 1) {
+                String minor = this.minor.substring(0, 2); // per javadoc end index is not inclusive
+                int m = Integer.parseInt(minor);
+                if (m <= 11) {
+                    // 3.x cluster
+                    LOGGER.info("OpenShift OAuth the server is 3.x, specifically " + this.toString());
+                    return false;
+                } else {
+                    // 4.x cluster
+                    LOGGER.info("OpenShift OAuth server is 4.x, specifically " + this.toString());
+                    return true;
+                }
+
+            } else {
+                // 3.x cluster
+                LOGGER.info("OpenShift OAuth the server is 3.x, specifically " + this.toString());
+                return false;
+            }
+        } else {
+            // 3.x cluster
+            LOGGER.info("OpenShift OAuth server is 3.x, specifically " + this.toString());
+            return false;
+        }
     }
 
 }
