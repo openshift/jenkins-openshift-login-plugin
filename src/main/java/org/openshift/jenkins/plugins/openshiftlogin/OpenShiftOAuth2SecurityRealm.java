@@ -627,7 +627,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
                 LOGGER.info( "Now checking if we are on an OpenShift3 cluster and the answer is:  " + isOpenShift3Cluster);
                 // For now, this will always return true if "version" is not null, basically if we are in OpenShift
                 //TODO check if we can just return true
-                return isOpenShift3Cluster || version.isOpenShift4Cluster();
+                return !isOpenShift3Cluster || version.isOpenShift4Cluster();
             }
         } catch (Throwable t) {
             LOGGER.log(Level.INFO, "Failed to get version attempt failed", t);
