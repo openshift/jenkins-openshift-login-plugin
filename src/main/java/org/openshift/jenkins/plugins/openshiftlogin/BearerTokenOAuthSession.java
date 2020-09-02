@@ -29,6 +29,7 @@ import java.util.logging.Logger;
 
 import org.kohsuke.stapler.HttpRedirect;
 import org.kohsuke.stapler.HttpResponse;
+import org.kohsuke.stapler.Stapler;
 
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.AuthorizationCodeTokenRequest;
@@ -66,7 +67,9 @@ public final class BearerTokenOAuthSession extends OAuthSession {
                     .setFromTokenResponse(response);
             this.setCredential(credential);
             secRealm.updateAuthorizationStrategy(credential);
-
+            if (Stapler.getCurrentRequest() != null && Stapler.getCurrentRequest().getSession() != null) {
+                Stapler.getCurrentRequest().getSession().setAttribute("oAuthAccessToken", response);
+            }
             return new HttpRedirect(redirectOnFinish);
 
         } catch (Throwable e) {
