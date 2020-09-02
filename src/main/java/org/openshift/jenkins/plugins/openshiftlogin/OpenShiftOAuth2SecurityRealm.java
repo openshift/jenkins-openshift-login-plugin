@@ -56,9 +56,12 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.Base64;
 
 import javax.net.ssl.SSLHandshakeException;
 import javax.servlet.ServletException;
+
+import java.security.MessageDigest;
 
 import org.acegisecurity.Authentication;
 import org.acegisecurity.GrantedAuthority;
@@ -71,6 +74,7 @@ import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.Stapler;
 import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
 
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
@@ -85,6 +89,8 @@ import com.google.api.client.http.HttpRequestFactory;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.util.SecurityUtils;
+import com.google.api.client.auth.openidconnect.IdTokenResponse;
+
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.EnvVars;
@@ -138,6 +144,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
     private static final String SAR_URI = "/apis/authorization.openshift.io/v1/subjectaccessreviews";
     private static final String CONFIG_MAP_URI = "/api/v1/namespaces/%s/configmaps/openshift-jenkins-login-plugin-config";
     private static final String OAUTH_PROVIDER_URI = "/.well-known/oauth-authorization-server";
+    private static final String OAUTH_ACCESS_URI = "/apis/oauth.openshift.io/v1/oauthaccesstokens/%s";
 
     private static final String K8S_HOST_ENV_VAR = "KUBERNETES_SERVICE_HOST";
     private static final String K8S_PORT_ENV_VAR = "KUBERNETES_SERVICE_PORT";
@@ -1099,6 +1106,33 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
     }
 
     @Override
+    public void doLogout(StaplerRequest req, StaplerResponse resp) throws IOException, ServletException {
+        IdTokenResponse idTokenResponse = (IdTokenResponse)req.getSession().getAttribute("oAuthAccessToken");
+        if (idTokenResponse != null) {
+            String oAuthToken = idTokenResponse.getAccessToken();
+            String oAuthtokenName =  tokenToObjectName(oAuthToken);
+            deleteOauthAccessToken(oAuthtokenName);
+        }
+        super.doLogout(req, resp);
+    }
+
+    protected String tokenToObjectName(String code) {
+        String sha256Prefix = "sha256~";
+        if (!code.startsWith(sha256Prefix)) {
+            return code;
+        } else {
+            try {
+                MessageDigest md = MessageDigest.getInstance("SHA-256");
+                byte[] hash = md.digest(code.substring(sha256Prefix.length()).getBytes("UTF-8"));
+                return sha256Prefix + Base64.getUrlEncoder().withoutPadding().encodeToString(hash).trim();
+            } catch(Exception e) {
+                OpenShiftOAuth2SecurityRealm.LOGGER.log(FINE, "tokenToObjectName", e);
+                return null;
+            }
+        }
+    }
+
+    @Override
     protected String getPostLogOutUrl(StaplerRequest req, Authentication auth) {
         if (req.getRequestURL().toString().contains(LOGOUT))
             req.getSession().setAttribute(LOGGING_OUT, LOGGING_OUT);
@@ -1123,7 +1157,24 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
         return req.getRequestURL().toString().replace(LOGOUT, EMPTY_STRING);
     }
    
-   
+   protected void deleteOauthAccessToken(String oAuthAccessToken) {
+       final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod())
+                .setAccessToken(getDefaultedClientSecret().getPlainText());
+        HttpRequestFactory requestFactory = transport.createRequestFactory(new CredentialHttpRequestInitializer(credential));
+        GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + String.format(OAUTH_ACCESS_URI, oAuthAccessToken));
+        HttpRequest request = null;
+        try {
+            request = requestFactory.buildDeleteRequest(url);
+            com.google.api.client.http.HttpResponse response = request.execute();
+            int rc = response.getStatusCode();
+            if (rc != HTTP_OK) {
+                LOGGER.info( "OpenShift OAuth got an unexpected return code trying to delete oAuthAccessToken: " + rc);
+            }
+            LOGGER.info( "oAuthAccessToken successfully deleted" );
+        } catch (Throwable t) {
+            LOGGER.log(Level.INFO, "Failed to delete oAuthAccessToken", t);
+        }
+   }
 
     @Extension
     public static final class DescriptorImpl extends Descriptor<SecurityRealm> {
