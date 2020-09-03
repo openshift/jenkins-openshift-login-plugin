@@ -20,6 +20,7 @@ import org.kohsuke.stapler.HttpResponses;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 
+@SuppressWarnings("serial")
 public class OpenShiftHttpRedirectWithPrompt extends RuntimeException implements
         HttpResponse {
 
