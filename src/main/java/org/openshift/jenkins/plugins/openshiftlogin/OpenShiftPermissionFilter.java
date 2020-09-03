@@ -24,16 +24,11 @@
  */
 package org.openshift.jenkins.plugins.openshiftlogin;
 
-import hudson.EnvVars;
-import hudson.model.User;
-import hudson.security.SecurityRealm;
-
 import static java.util.logging.Level.SEVERE;
 import static org.openshift.jenkins.plugins.openshiftlogin.OAuthSession.SESSION_NAME;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.logging.Level;
 
@@ -55,6 +50,8 @@ import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.http.HttpResponseException;
 
+import hudson.EnvVars;
+import hudson.security.SecurityRealm;
 import jenkins.model.Jenkins;
 import jenkins.security.SecurityListener;
 

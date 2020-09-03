@@ -40,6 +40,7 @@ import com.google.api.client.auth.openidconnect.IdTokenResponse;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.util.HttpResponses;
 
+@SuppressWarnings("serial")
 public final class BearerTokenOAuthSession extends OAuthSession {
     static final Logger LOGGER = Logger.getLogger(BearerTokenOAuthSession.class.getName());
     private final String redirectOnFinish;
@@ -68,7 +69,7 @@ public final class BearerTokenOAuthSession extends OAuthSession {
             this.setCredential(credential);
             secRealm.updateAuthorizationStrategy(credential);
             if (Stapler.getCurrentRequest() != null && Stapler.getCurrentRequest().getSession() != null) {
-                Stapler.getCurrentRequest().getSession().setAttribute("oAuthAccessToken", response);
+                Stapler.getCurrentRequest().getSession().setAttribute(OpenShiftOAuth2SecurityRealm.OAUTH_ACCESS_TOKEN_NAME, response);
             }
             return new HttpRedirect(redirectOnFinish);
 

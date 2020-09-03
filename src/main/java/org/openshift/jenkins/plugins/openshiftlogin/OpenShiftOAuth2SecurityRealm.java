@@ -122,25 +122,30 @@ import jenkins.security.SecurityListener;
 @SuppressWarnings("serial")
 @SuppressFBWarnings
 public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Serializable {
-    private static final String EMPTY_STRING = "";
+
+    public static final String OAUTH_ACCESS_TOKEN_NAME = "oaatn";
+    public static final String SECURITY_REALM_FINISH_LOGIN = "/securityRealm/finishLogin";
+    public static final String DEFAULT_SVC_ACCT_DIR = "/run/secrets/kubernetes.io/serviceaccount";
 
     static final Logger LOGGER = Logger.getLogger(OpenShiftOAuth2SecurityRealm.class.getName());
+    static final String DEFAULT_SVR_PREFIX = "https://kubernetes.default:443";
+    static final String LOGGING_OUT = "loggingOut";
 
     /**
      * OAuth 2 scope. This is enough to call a variety of userinfo api's.
      */
+    private static final String EMPTY_STRING = "";
     private static final String SCOPE_INFO = "user:info";
     private static final String SCOPE_CHECK_ACCESS = "user:check-access";
 
-    static final String DEFAULT_SVC_ACCT_DIR = "/run/secrets/kubernetes.io/serviceaccount";
-    static final String DEFAULT_SVR_PREFIX = "https://kubernetes.default:443";
-    static final String NAMESPACE = "namespace";
+    private static final String NAMESPACE = "namespace";
     private static final String TOKEN = "token";
     private static final String CA_CRT = "ca.crt";
     private static final String FINISH_METHOD = "doFinishLogin";
     private static final String START_METHOD = "doCommenceLogin";
     private static final String DISPLAY_NAME = "Login with OpenShift";
     private static final String LOGIN_URL = "securityRealm/commenceLogin";
+    private static final String LOGGED_OUT = "/plugin/openshift-login/loggedOut.html";
 
     private static final String USER_URI = "/apis/user.openshift.io/v1/users/~";
     private static final String SAR_URI = "/apis/authorization.openshift.io/v1/subjectaccessreviews";
@@ -151,35 +156,24 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
     private static final String K8S_HOST_ENV_VAR = "KUBERNETES_SERVICE_HOST";
     private static final String K8S_PORT_ENV_VAR = "KUBERNETES_SERVICE_PORT";
 
-    static final String LOGGING_OUT = "loggingOut";
-
     private static final String HTTPS_SCHEME = "https";
     private static final String HTTP_SCHEME = "http";
     private static final String SCHEME_SEPARATOR = "://";
     private static final String PORT_SEPARATOR = ":";
-    private final static Locale DEFAULT_LOCALE_PERMISSION = Locale.US;
-    public static final String SECURITY_REALM_FINISH_LOGIN = "/securityRealm/finishLogin";
+    private static final Locale DEFAULT_LOCALE_PERMISSION = Locale.US;
 
-    static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
-
+    private static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
     private static final Object USER_UPDATE_LOCK = new Object();
 
     // making this an instance variable lead to all sort of weird jenkins prompted
     // NPE issues of this not getting set through based on how this object was
     // constructed
     private static final ArrayList<String> roles = new ArrayList<String>(Arrays.asList("admin", "edit", "view"));
-
     private static final String HTTPS_PROXY_USER = "https.proxyUser";
-
     private static final String HTTPS_PROXY_PASSWORD = "https.proxyPassword";
-
     private static final String SHA256_PREFIX = "sha256~";
-
     private static final Encoder BASE64_ENCODER = Base64.getUrlEncoder().withoutPadding();
-
     private static final String SHA_256 = "SHA-256";
-
-    private static final String LOGGED_OUT = "/plugin/openshift-login/loggedOut.html";
 
     /**
      * Control the redirection URL for this realm. Exposed for testing.
@@ -1159,7 +1153,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
     @Override
     public void doLogout(StaplerRequest req, StaplerResponse resp) throws IOException, ServletException {
         LOGGER.info("Entering doLogout");
-        IdTokenResponse idTokenResponse = (IdTokenResponse) req.getSession().getAttribute("oAuthAccessToken");
+        IdTokenResponse idTokenResponse = (IdTokenResponse) req.getSession().getAttribute(OAUTH_ACCESS_TOKEN_NAME);
         if (idTokenResponse != null) {
             LOGGER.info("Found an  oauthaccess token in the sessions");
             String oAuthToken = idTokenResponse.getAccessToken();

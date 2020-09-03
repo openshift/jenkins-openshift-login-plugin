@@ -26,7 +26,6 @@ package org.openshift.jenkins.plugins.openshiftlogin;
 
 import java.util.logging.Logger;
 
-import hudson.EnvVars;
 import hudson.Extension;
 import hudson.model.Item;
 import hudson.model.listeners.ItemListener;
