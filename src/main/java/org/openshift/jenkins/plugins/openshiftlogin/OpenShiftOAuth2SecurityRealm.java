@@ -44,7 +44,6 @@ import java.io.Serializable;
 import java.net.Authenticator;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -120,6 +119,7 @@ import jenkins.security.SecurityListener;
  * Login with OpenShift using OpenID Connect / OAuth 2
  *
  */
+@SuppressWarnings("serial")
 @SuppressFBWarnings
 public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Serializable {
     private static final String EMPTY_STRING = "";
@@ -151,8 +151,6 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
     private static final String K8S_HOST_ENV_VAR = "KUBERNETES_SERVICE_HOST";
     private static final String K8S_PORT_ENV_VAR = "KUBERNETES_SERVICE_PORT";
 
-    private static final String LOGOUT = "logout";
-
     static final String LOGGING_OUT = "loggingOut";
 
     private static final String HTTPS_SCHEME = "https";
@@ -180,6 +178,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
     private static final Encoder BASE64_ENCODER = Base64.getUrlEncoder().withoutPadding();
 
     private static final String SHA_256 = "SHA-256";
+
+    private static final String LOGGED_OUT = "/plugin/openshift-login/loggedOut.html";
 
     /**
      * Control the redirection URL for this realm. Exposed for testing.
@@ -291,40 +291,34 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             String clientId, String clientSecret, String redirectURL) throws IOException, GeneralSecurityException {
         HttpTransport transport = HTTP_TRANSPORT;
 
-        if (LOGGER.isLoggable(FINE))
-            LOGGER.fine(String.format(
-                    "ctor: incoming args sa dir %s sa name %s svr prefix %s client id %s client secret %s redirectURL %s",
-                    serviceAccountDirectory, serviceAccountName, serverPrefix, clientId, clientSecret, redirectURL));
-
+        if (LOGGER.isLoggable(FINE)) {
+            String message = "ctor: incoming args sa dir %s sa name %s svr prefix %s client id %s client secret %s redirectURL %s";
+            String format = String.format(message, serviceAccountDirectory, serviceAccountName, serverPrefix, clientId,
+                    clientSecret, redirectURL);
+            LOGGER.fine(format);
+        }
         String fixedServiceAccountDirectory = Util.fixEmpty(serviceAccountDirectory);
         this.clientId = Util.fixEmpty(clientId);
-        if (Util.fixEmpty(clientSecret) != null)
-            this.clientSecret = Secret.fromString(clientSecret);
-        else
-            this.clientSecret = null;
-
+        this.clientSecret = Util.fixEmpty(clientSecret) != null ? Secret.fromString(clientSecret) : null;
         this.defaultedServerPrefix = DEFAULT_SVR_PREFIX;
         this.serverPrefix = Util.fixEmpty(serverPrefix);
-
         this.redirectURL = Util.fixEmpty(redirectURL);
-
         this.defaultedServiceAccountDirectory = DEFAULT_SVC_ACCT_DIR;
         this.serviceAccountDirectory = fixedServiceAccountDirectory;
-
         this.serviceAccountName = Util.fixEmpty(serviceAccountName);
 
         OpenShiftOAuth2SecurityRealm.transport = transport;
-
         jvmDefaultKeystoreTransport = new NetHttpTransport.Builder().build();
-
-        if (testTransport != null)
+        if (testTransport != null) {
             OpenShiftOAuth2SecurityRealm.transport = testTransport;
-        else
+        } else {
             populateDefaults();
+        }
 
-        if (LOGGER.isLoggable(Level.FINE))
+        if (LOGGER.isLoggable(Level.FINE)) {
             LOGGER.fine(String.format("ctor: derived default client id %s client secret %s sa dir %s transport %s",
                     defaultedClientId, defaultedClientSecret, defaultedServiceAccountDirectory, transport));
+        }
     }
 
     /*
@@ -406,17 +400,16 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             defaultedClientId = "system:serviceaccount:" + namespace + ":" + getDefaultedServiceAccountName();
 
             provider = getOpenShiftOAuthProvider(credential, transport);
-            if (withinAPod)
+            if (withinAPod) {
                 LOGGER.info(String.format("OpenShift OAuth: provider: %s", provider));
+            }
             if (provider != null) {
-                // the issuer is the public address of the k8s svc; use this vs.
-                // the hostname or ip/port that is only available within the
-                // cluster
+                // the issuer is the public address of the k8s svc; use this vs. the hostname or
+                // ip/port that is only available within the cluster
                 this.defaultedRedirectURL = provider.issuer;
-                // for diagnostics: see if the provider endpoints are accessible, given what
-                // Mo told me about them moving the oauth server from internal to a route based
-                // external one
-                // on the fly
+                // for diagnostics: see if the provider endpoints are accessible, given what Mo
+                // told me about them moving the oauth server from internal to a route based
+                // external one on the fly
                 if (this.useProviderOAuthEndpoint(credential))
                     this.transportToUse(credential);
             } else {
@@ -436,11 +429,11 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             boolean hasClientID = this.clientId != null || this.defaultedClientId != null;
             boolean hasClientSecret = this.clientSecret != null || this.defaultedClientSecret != null;
             boolean hasRedirectURL = this.redirectURL != null || this.defaultedRedirectURL != null;
-            // namespace check is really the validation that the service account
-            // directory is OK
-            if (this.namespace != null && hasSAName && hasSecret && hasClientID && hasClientSecret && hasRedirectURL)
+            // namespace check is really the validation that the service account directory
+            // is OK
+            if (this.namespace != null && hasSAName && hasSecret && hasClientID && hasClientSecret && hasRedirectURL) {
                 runningInOpenShiftPodWithRequiredOAuthFeatures = true;
-
+            }
         }
 
         if (withinAPod) {
@@ -1051,12 +1044,30 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
     }
 
     /**
+     * the method pointed by LOGGED_OUT.
+     */
+    public HttpResponse loggedOut(@QueryParameter String from, @Header("Referer") final String referer) {
+        LOGGER.info("loggedOut: Printing the OpenShiftHttpRedirectWithPrompt (the page with the button)");
+        return new OpenShiftHttpRedirectWithPrompt("/");
+    }
+
+    /**
      * The login process starts from here.
      */
     public HttpResponse doCommenceLogin(@QueryParameter String from, @Header("Referer") final String referer)
             throws IOException {
-        if (LOGGER.isLoggable(Level.FINE))
-            LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), START_METHOD, new Object[] { from, referer });
+        LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), START_METHOD, new Object[] { from, referer });
+        LOGGER.info("doCommenceLogin: Coming from: " + referer);
+        if (referer.contains(LOGGED_OUT)) {
+            if (!referer.contains("ok")) {
+                LOGGER.info("doCommenceLogin: Returning to loggedOut and adding marker parameter");
+                return new HttpRedirect(LOGGED_OUT + "?ok");
+            } else {
+                String oauthUrl = buildOAuthRedirectUrl(referer);
+                LOGGER.info("doCommenceLogin: Returning OpenShiftHttpRedirectWithPrompt(" + oauthUrl + ") response");
+                return new HttpRedirect(oauthUrl);
+            }
+        }
 
         // refresh defaults just in case the jenkins pod was recycled, etc.
         try {
@@ -1082,7 +1093,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
         } else {
             redirectOnFinish = Jenkins.getInstance().getRootUrl();
         }
-
+        LOGGER.info("doCommenceLogin: redirectOnFinish:" + redirectOnFinish);
+        LOGGER.info("doCommenceLogin: refererURL:" + refererURL);
+        LOGGER.info("doCommenceLogin: fromURL:" + fromURL);
+        LOGGER.info("doCommenceLogin: Coming from: " + referer);
         return newOAuthSession(from, redirectOnFinish).doCommenceLogin();
     }
 
@@ -1144,13 +1158,25 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
 
     @Override
     public void doLogout(StaplerRequest req, StaplerResponse resp) throws IOException, ServletException {
+        LOGGER.info("Entering doLogout");
         IdTokenResponse idTokenResponse = (IdTokenResponse) req.getSession().getAttribute("oAuthAccessToken");
         if (idTokenResponse != null) {
+            LOGGER.info("Found an  oauthaccess token in the sessions");
             String oAuthToken = idTokenResponse.getAccessToken();
             String oAuthtokenName = tokenToObjectName(oAuthToken);
+            LOGGER.info("The oauthaccesstoken to delete has a computed name of: " + oAuthtokenName);
             deleteOauthAccessToken(oAuthtokenName);
+            LOGGER.info("The oauthaccesstoken has been deleted successfully");
         }
+        LOGGER.info("Now calling the super.doLogout method: This will invalidate and delete the session if present");
         super.doLogout(req, resp);
+        LOGGER.info("Logout done: redirecting to the URL computed by: getPostLogOutUrl()");
+    }
+
+    @Override
+    protected String getPostLogOutUrl(StaplerRequest req, Authentication auth) {
+        LOGGER.info("Entering getPostLogOutUrl with request URL: " + req.getRequestURL().toString());
+        return LOGGED_OUT;
     }
 
     /**
@@ -1173,31 +1199,6 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
         byte[] hash = digest.digest(code.getBytes(UTF_8));
         Base64.getUrlEncoder().encodeToString(hash);
         return SHA256_PREFIX + BASE64_ENCODER.encodeToString(hash);
-    }
-
-    @Override
-    protected String getPostLogOutUrl(StaplerRequest req, Authentication auth) {
-        if (req.getRequestURL().toString().contains(LOGOUT))
-            req.getSession().setAttribute(LOGGING_OUT, LOGGING_OUT);
-        // there was a scenario when a user a) logged out of jenkins, and b)
-        // jenkins was restarted,
-        // where the various redirection query parameters on the logout url
-        // would result in a login
-        // going directly to the doFinishLogin path with no http session / oauth
-        // session available;
-        // forcing the user back down the doCommenceLogin path did not work for
-        // various reasons, and
-        // the solution above (to redirect to jenkins root) meant the user had
-        // to submit the login
-        // request twice to get authenticated and logged in.
-        //
-        // By updating the post log out url here with this Jenkins plugin point
-        // (where we strip out the /logout suffix Jenkins applies
-        // and return the last success url the user accessed Jenkins with, we
-        // avoid the need for the
-        // 2 login attempts after logout when jenkins is recycled in the
-        // interim.
-        return req.getRequestURL().toString().replace(LOGOUT, EMPTY_STRING);
     }
 
     protected void deleteOauthAccessToken(String oAuthAccessToken) {
