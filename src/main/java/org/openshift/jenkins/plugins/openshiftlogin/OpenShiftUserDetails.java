@@ -29,6 +29,7 @@ import org.acegisecurity.userdetails.UserDetails;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
+@SuppressWarnings("serial")
 @SuppressFBWarnings
 public class OpenShiftUserDetails implements UserDetails {
     
