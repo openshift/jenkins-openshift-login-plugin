@@ -411,10 +411,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             }
         } catch (Throwable t) {
             runningInOpenShiftPodWithRequiredOAuthFeatures = false;
-            if (LOGGER.isLoggable(Level.FINE))
-                LOGGER.log(Level.FINE, "populateDefaults", t);
-            else if (withinAPod)
-                LOGGER.log(Level.INFO, "populateDefaults", t);
+            LOGGER.log(Level.FINE, "populateDefaults", t);
         }
 
         if (!runningInOpenShiftPodWithRequiredOAuthFeatures) {
@@ -572,12 +569,12 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
                 HttpRequest request = requestFactory.buildHeadRequest(url);
                 request.execute().getStatusCode();
                 // most likely will not get here on vanilla head request but just in case
-                LOGGER.info(
+                LOGGER.fine(
                         "OpenShift OAuth was able to complete the SSL handshake when accessing the issuer's token endpoint using the JVMs default keystore");
             } catch (com.google.api.client.http.HttpResponseException hre) {
                 // this means SSL handshakes work, but our generic head simply is not honored by
                 // the endpoint
-                LOGGER.info(
+                LOGGER.fine(
                         "OpenShift OAuth was able to complete the SSL handshake when accessing the issuer's token endpoint using the JVMs default keystore");
                 return jvmDefaultKeystoreTransport;
             } catch (Throwable t) {
@@ -608,10 +605,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
     private void initializeHttpsProxyAuthenticator() {
         final String username = System.getProperty(HTTPS_PROXY_USER);
         final String password = System.getProperty(HTTPS_PROXY_PASSWORD);
-        LOGGER.log(INFO, "Checking if HTTPS proxy initialization is required ... ");
+        LOGGER.log(FINE, "Checking if HTTPS proxy initialization is required ... ");
         if (username != null && password != null) {
             LOGGER.log(FINE, HTTPS_PROXY_USER + " or " + HTTPS_PROXY_PASSWORD + " found in system properties...");
-            LOGGER.log(INFO, "Creating basic authenticator for HTTPS proxy auth");
+            LOGGER.log(FINE, "Creating basic authenticator for HTTPS proxy auth");
             Authenticator.setDefault(new BasicAuthenticator(username, password));
         }
     }
@@ -647,7 +644,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
                 return version.isOpenShift4Cluster();
             }
         } catch (Throwable t) {
-            LOGGER.log(Level.INFO, "Failed to get version attempt failed", t);
+            LOGGER.log(Level.FINE, "Failed to get version attempt failed", t);
         }
         LOGGER.info("Determining OpenShift version failed...falling back into OpenShift3 behaviour");
         // default to old, traditional 3.x behavior
