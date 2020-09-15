@@ -195,7 +195,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
      * transport that will only leverage the JVMs default keystore and allow for the
      * jenkins SA cert and the oauth server router cert varying such that SSL
      * handshakes will fail if we exclusively use the jenkins SA cert
-     * 
+     *
      */
     private static HttpTransport jvmDefaultKeystoreTransport;
 
@@ -1154,7 +1154,10 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
         if (idTokenResponse != null) {
             LOGGER.info("Found an  oauthaccess token in the sessions");
             String oAuthToken = idTokenResponse.getAccessToken();
-            String oAuthtokenName = tokenToObjectName(oAuthToken);
+            String oAuthtokenName = oAuthToken;
+            if (oAuthToken.startsWith(SHA256_PREFIX)) {
+                oAuthtokenName = tokenToObjectName(oAuthToken);
+            }
             LOGGER.info("The oauthaccesstoken to delete has a computed name of: " + oAuthtokenName);
             deleteOauthAccessToken(oAuthtokenName);
             LOGGER.info("The oauthaccesstoken has been deleted successfully");
