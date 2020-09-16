@@ -11,20 +11,20 @@ public class OAuthTokenUtilsTest {
     }
     @Test
     public void testTokenToObjectNameWithoutPrefix() throws NoSuchAlgorithmException {
-        String input = "FS-hBG4Sm1gh5Eb0po5jUPoMpVfmLa_6wNqamsAA8bM";
-        String expected = "sha256~JzvK219R86Q30jidBjO7CYMcYV5JaRVFPS6uWY2KNZo";
+        String input = "HQlI91PGxyt39s7xcMQ8EteviaRUKx4eGBYKwNPnab0";
+        String expected = "HQlI91PGxyt39s7xcMQ8EteviaRUKx4eGBYKwNPnab0";
         assertEquals(expected, OpenShiftOAuth2SecurityRealm.tokenToObjectName(input));
     }
     @Test
-    public void testTokenToObjectNameWithoutNullInput() throws NoSuchAlgorithmException {
+    public void testTokenToObjectNameWitNullInput() throws NoSuchAlgorithmException {
         String input = null;
-        String expected = "sha256~47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU";
+        String expected = "";
         assertEquals(expected, OpenShiftOAuth2SecurityRealm.tokenToObjectName(input));
     }
     @Test
-    public void testTokenToObjectNameWithoutEmptyStringInput() throws NoSuchAlgorithmException {
+    public void testTokenToObjectNameWithEmptyStringInput() throws NoSuchAlgorithmException {
         String input = "";
-        String expected = "sha256~47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU";
+        String expected = "";
         assertEquals(expected, OpenShiftOAuth2SecurityRealm.tokenToObjectName(input));
     }
 }

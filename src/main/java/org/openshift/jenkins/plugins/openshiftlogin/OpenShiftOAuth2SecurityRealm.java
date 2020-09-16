@@ -1175,21 +1175,27 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
      * @return the computed access token name on the openshift side
      */
     public static String tokenToObjectName(String code) {
+        // for empty string or null, we will return an empty string to avoid any NPE     
         if (code == null) {
             code = EMPTY_STRING;
         }
+        // if the token code doesn't start with SHA256_PREFIX, we will 
+        // return the code itself as the token name. This is the expected behaviour 
+        // with ocp 4.5 and lower. if it starts with the prefix, we 
+        // have to compute the sha_256 digest
         if (code.startsWith(SHA256_PREFIX)) {
             code = code.substring(SHA256_PREFIX.length());
+            MessageDigest digest;
+            try {
+                digest = MessageDigest.getInstance(SHA_256);
+            } catch (NoSuchAlgorithmException e) {
+                throw new RuntimeException(e);
+            }
+            byte[] hash = digest.digest(code.getBytes(UTF_8));
+            Base64.getUrlEncoder().encodeToString(hash);
+            code = SHA256_PREFIX + BASE64_ENCODER.encodeToString(hash);
         }
-        MessageDigest digest;
-        try {
-            digest = MessageDigest.getInstance(SHA_256);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        }
-        byte[] hash = digest.digest(code.getBytes(UTF_8));
-        Base64.getUrlEncoder().encodeToString(hash);
-        return SHA256_PREFIX + BASE64_ENCODER.encodeToString(hash);
+        return code;
     }
 
     protected void deleteOauthAccessToken(String oAuthAccessToken) {
