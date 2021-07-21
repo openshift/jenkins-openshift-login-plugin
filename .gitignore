@@ -7,4 +7,4 @@ target/
 /jpi/
 /Dockerfile-jenkins-ext-oauth
 /sa/
-PR-Testing/
+PR-Testing/jpi/
