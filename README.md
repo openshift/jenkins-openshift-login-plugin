@@ -116,6 +116,66 @@ time the poll occurs.
 
 You can control how often the polling occurs with the `OPENSHIFT_PERMISSIONS_POLL_INTERVAL` environment variable.  The default polling interval when no environment variable is set is 5 minutes.
 
+#### Using custom Roles
+
+If you would like to use a custom role such as 'jenkins-admin' then you need to first create a role:
+
+```yaml
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: jenkins-admin (1)
+  namespace: jenkins (2)
+rules:
+  - verbs:
+      - jenkins-admin (3)
+    apiGroups:
+      - build.openshift.io (4)
+    resources:
+      - jenkins (5)
+```
+
+1. Name of the role doesn't actually matter, but for consistancy suggest aligning with (3)
+2. Namespace of the role needs to be either in the namespace Jenkins is running in or htis needs to be a ClusterRole not bound to a namespace
+3. The verb is the key bit, and is what you will use in your openshift-jenkins-login-plugin-config ConfigMap as the role OpenShift role name
+   * **IMPORTANT**: The plugin does not look at the Role name (1) but rather [treates the roles in the openshift-jenkins-login-plugin-config ConfigMap as verbes](https://github.com/openshift/jenkins-openshift-login-plugin/blob/master/src/main/java/org/openshift/jenkins/plugins/openshiftlogin/OpenShiftOAuth2SecurityRealm.java#L684-L685) on the [apiGroup (4)](https://github.com/openshift/jenkins-openshift-login-plugin/blob/master/src/main/java/org/openshift/jenkins/plugins/openshiftlogin/OpenShiftSubjectAccessReviewRequest.java#L39) and [resource (5)](https://github.com/openshift/jenkins-openshift-login-plugin/blob/master/src/main/java/org/openshift/jenkins/plugins/openshiftlogin/OpenShiftSubjectAccessReviewRequest.java#L40).
+4. This currently has to be `build.openshift.io`
+5. This currently has to be `jenkins`
+
+Then you can create a RoleBinding between your user(s) or group(s) to the Role. For example:
+
+```yaml
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: user42-jenkins-admin (1)
+  namespace: jenkins (2)
+subjects: (3)
+  - kind: User
+    apiGroup: rbac.authorization.k8s.io
+    name: user42
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: jenkins-admin (4)
+```
+1. RoleBinding name does not matter, use something descriptive
+2. Namespace must be the namespace Jenkins is running in
+3. Subjects should be any user(s) or group(s) want to give the role to
+4. roleRef Name should be the name of the Role created previously
+
+Then finally update your openshift-jenkins-login-plugin-config ConfigMap to use the custom role/verb.
+
+```yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: openshift-jenkins-login-plugin-config
+  namespace: jenkins
+data:
+  Overall-Administer: 'jenkins-admin' (1)
+```
+1. where the OpenShift role referenced here is actually a `verb` on the `build.openshift.io` apiGroup `jenkins` resource that a set of users has access to via a RoleBinding to a Role that grants access to that verb.
 
 ## Secondary scenarios
 
