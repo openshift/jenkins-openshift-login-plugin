@@ -299,6 +299,7 @@ main() {
     mkdir -p "$REF_DIR" || exit 1
 
     resolveDependencies "openshift-sync"
+    resolveDependencies "openshift-login"
     
     echo
     echo "Installed plugins:"
