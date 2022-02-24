@@ -752,7 +752,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
         for (Entry<String, String> entry : response.data.entrySet()) {
             String permissionAsString = entry.getKey();
 
-            String[] parsedPermission = permissionAsString.trim().split("-");
+            String[] parsedPermission = permissionAsString.replace("_", " ").trim().split("-");
             if (parsedPermission == null || parsedPermission.length != 2) {
                 LOGGER.info(prefix + " ignore permission string " + permissionAsString
                         + " since if is not of the form <permGroupId>-<permId>");

@@ -114,6 +114,10 @@ Finally, permissions for users in Jenkins, and OpenShift to Jenkins permission m
 Jenkins for each Jenkins user with the permissions retrieved from OpenShift.  Technically speaking, you can change the permissions for a Jenkins user from the Jenkins UI as well, but those changes will be overwritten the next
 time the poll occurs.
 
+Some permission like `Lockable Resources` contains spaces. In order to configure them using config map, the space must be replaced by an '_'.
+
+For example `Lockable_Resources-Unlock: 'view,edit'`
+
 You can control how often the polling occurs with the `OPENSHIFT_PERMISSIONS_POLL_INTERVAL` environment variable.  The default polling interval when no environment variable is set is 5 minutes.
 
 #### Using custom Roles
