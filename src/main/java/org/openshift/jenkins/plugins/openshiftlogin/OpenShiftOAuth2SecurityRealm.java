@@ -28,6 +28,7 @@ import static java.lang.String.format;
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 import static java.net.HttpURLConnection.HTTP_OK;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Collections.singletonList;
 import static java.util.logging.Level.FINE;
 import static java.util.logging.Level.INFO;
 import static java.util.logging.Level.WARNING;
@@ -49,16 +50,9 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
+import java.util.*;
 import java.util.Base64.Encoder;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -66,9 +60,8 @@ import javax.net.ssl.SSLHandshakeException;
 import javax.servlet.ServletException;
 
 import org.acegisecurity.Authentication;
-import org.acegisecurity.GrantedAuthority;
-import org.acegisecurity.context.SecurityContextHolder;
-import org.acegisecurity.providers.UsernamePasswordAuthenticationToken;
+import org.jenkinsci.plugins.matrixauth.AuthorizationType;
+import org.jenkinsci.plugins.matrixauth.PermissionEntry;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.Header;
 import org.kohsuke.stapler.HttpRedirect;
@@ -114,6 +107,9 @@ import hudson.util.FormValidation;
 import hudson.util.Secret;
 import jenkins.model.Jenkins;
 import jenkins.security.SecurityListener;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Login with OpenShift using OpenID Connect / OAuth 2
@@ -195,7 +191,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
      * transport that will only leverage the JVMs default keystore and allow for the
      * jenkins SA cert and the oauth server router cert varying such that SSL
      * handshakes will fail if we exclusively use the jenkins SA cert
-     * 
+     *
      */
     private static HttpTransport jvmDefaultKeystoreTransport;
 
@@ -696,7 +692,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
                 if (LOGGER.isLoggable(Level.FINE))
                     LOGGER.fine(String.format(
                             "postSAR: response for verb %s hydrated into obj: namespace %s allowed %s reason %s", verb,
-                            review.namespace, Boolean.toString(review.allowed), review.reason));
+                            review.namespace, review.allowed, review.reason));
                 if (review.allowed && !allowedRoles.contains(verb)) {
                     allowedRoles.add(verb);
                 }
@@ -890,7 +886,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
         OpenShiftUserInfo info = getOpenShiftUserInfo(credential, transport);
         Map<String, List<Permission>> cfgedRolePermMap = getRoleToPermissionMap(transport);
         ArrayList<String> allowedRoles = postSAR(credential, transport);
-        GrantedAuthority[] authorities = new GrantedAuthority[] { SecurityRealm.AUTHENTICATED_AUTHORITY };
+        List<GrantedAuthority> authorities = singletonList(SecurityRealm.AUTHENTICATED_AUTHORITY2);
 
         // we append the role suffix to the name stored into Jenkins, since a
         // given user is able to log in at varying scope/permission
@@ -934,7 +930,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             // suffix
             u.setFullName(info.getName());
             u.save();
-            SecurityListener.fireAuthenticated(new OpenShiftUserDetails(token.getName(), authorities));
+            SecurityListener.fireAuthenticated2(new OpenShiftUserDetails(token.getName(), authorities));
 
             // So if you look at GlobalSecurityConfiguration and
             // GlobalMatrixAuthorizationStrategy (including its DescriptorImpl)
@@ -992,8 +988,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
                             // prior auth mgr to our new one
                             for (PermissionGroup pg : permissionGroups) {
                                 for (Permission p : pg.getPermissions()) {
-                                    if (existingAuthMgr.hasPermission(userGroup, p)) {
-                                        newAuthMgr.add(p, userGroup);
+                                    if (existingAuthMgr.hasPermission(userGroup, p, false)) {
+                                        newAuthMgr.add(p, new PermissionEntry(AuthorizationType.GROUP, userGroup));
                                     }
                                 }
                             }
@@ -1008,7 +1004,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
                         for (String role : allowedRoles) {
                             List<Permission> perms = cfgedRolePermMap.get(role);
                             for (Permission perm : perms) {
-                                newAuthMgr.add(perm, matrixKey);
+                                newAuthMgr.add(perm, new PermissionEntry(AuthorizationType.USER, matrixKey));
                             }
                         }
 
@@ -1175,13 +1171,13 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
      * @return the computed access token name on the openshift side
      */
     public static String tokenToObjectName(String code) {
-        // for empty string or null, we will return an empty string to avoid any NPE     
+        // for empty string or null, we will return an empty string to avoid any NPE
         if (code == null) {
             code = EMPTY_STRING;
         }
-        // if the token code doesn't start with SHA256_PREFIX, we will 
-        // return the code itself as the token name. This is the expected behaviour 
-        // with ocp 4.5 and lower. if it starts with the prefix, we 
+        // if the token code doesn't start with SHA256_PREFIX, we will
+        // return the code itself as the token name. This is the expected behaviour
+        // with ocp 4.5 and lower. if it starts with the prefix, we
         // have to compute the sha_256 digest
         if (code.startsWith(SHA256_PREFIX)) {
             code = code.substring(SHA256_PREFIX.length());

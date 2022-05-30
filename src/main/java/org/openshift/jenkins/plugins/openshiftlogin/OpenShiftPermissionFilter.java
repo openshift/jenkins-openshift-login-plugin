@@ -28,6 +28,7 @@ import static java.util.logging.Level.SEVERE;
 import static org.openshift.jenkins.plugins.openshiftlogin.OAuthSession.SESSION_NAME;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 import java.util.logging.Level;
@@ -42,9 +43,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
-import org.acegisecurity.GrantedAuthority;
-import org.acegisecurity.context.SecurityContextHolder;
-import org.acegisecurity.providers.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.Credential;
@@ -181,7 +181,7 @@ public class OpenShiftPermissionFilter implements Filter {
                                     entry.lastCheck = 0;
                                     // we check for first time in case system time is say reset to 1970
                                     // (perhaps we are in a VM that just spun up and the time has not been set)
-                                    // we are not going to bother finding a negative number big enough to ensure 
+                                    // we are not going to bother finding a negative number big enough to ensure
                                     // we are greater than interval * 100 in this case
                                     firstTime = true;
                                 }
@@ -211,7 +211,7 @@ public class OpenShiftPermissionFilter implements Filter {
                                 } else if (entry.token != null) {
                                     SecurityContextHolder.getContext()
                                             .setAuthentication(entry.token);
-                                    SecurityListener.fireAuthenticated(new OpenShiftUserDetails(entry.token.getName(), new GrantedAuthority[] { SecurityRealm.AUTHENTICATED_AUTHORITY }));
+                                    SecurityListener.fireAuthenticated2(new OpenShiftUserDetails(entry.token.getName(), Collections.singletonList(SecurityRealm.AUTHENTICATED_AUTHORITY2)));
                                 } else {
                                     HttpServletResponse httpResponse = (HttpServletResponse) response;
                                     httpResponse.sendError(401, NEED_TO_AUTH);

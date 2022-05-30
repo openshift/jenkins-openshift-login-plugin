@@ -24,25 +24,27 @@
  */
 package org.openshift.jenkins.plugins.openshiftlogin;
 
-import org.acegisecurity.GrantedAuthority;
-import org.acegisecurity.userdetails.UserDetails;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.Collection;
 
 @SuppressWarnings("serial")
 @SuppressFBWarnings
 public class OpenShiftUserDetails implements UserDetails {
-    
-    private String name;
-    private GrantedAuthority[] authorities;
 
-    public OpenShiftUserDetails(String name, GrantedAuthority[] auths) {
+    private String name;
+    private Collection<? extends GrantedAuthority> authorities;
+
+    public OpenShiftUserDetails(String name, Collection<? extends GrantedAuthority> auths) {
         this.name = name;
         this.authorities = auths;
     }
-    
+
     @Override
-    public GrantedAuthority[] getAuthorities() {
+    public Collection<? extends GrantedAuthority> getAuthorities() {
         return this.authorities;
     }
 
