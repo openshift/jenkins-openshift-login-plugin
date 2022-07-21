@@ -18,4 +18,7 @@
   <f:entry title="${%Client Secret}" field="clientSecret">
     <f:password/>
   </f:entry>
+  <f:entry title="${%Assign permissions to Jenkins groups instead of users}" field="mapRolesToGroups">
+    <f:checkbox/>
+  </f:entry>
 </j:jelly>

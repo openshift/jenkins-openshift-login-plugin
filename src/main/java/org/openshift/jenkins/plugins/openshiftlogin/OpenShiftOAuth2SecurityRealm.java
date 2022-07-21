@@ -269,6 +269,12 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
     private String defaultedClientSecret;
 
     /**
+     * Create groups in Jenkins and assign permissions to groups instead of users.
+     * TODO: mark added groups as GROUPS, and users as USERS, but not as EITHER. Didn't find out how to do that.
+     */
+    private final boolean mapRolesToGroups;
+
+    /**
      * The project/namespace of the serviceaccount for the jenkins pod
      */
     private String namespace;
@@ -282,7 +288,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
 
     @DataBoundConstructor
     public OpenShiftOAuth2SecurityRealm(String serviceAccountDirectory, String serviceAccountName, String serverPrefix,
-            String clientId, String clientSecret, String redirectURL) throws IOException, GeneralSecurityException {
+            String clientId, String clientSecret, String redirectURL, boolean mapRolesToGroups) throws IOException, GeneralSecurityException {
         HttpTransport transport = HTTP_TRANSPORT;
 
         if (LOGGER.isLoggable(FINE)) {
@@ -300,6 +306,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
         this.defaultedServiceAccountDirectory = DEFAULT_SVC_ACCT_DIR;
         this.serviceAccountDirectory = fixedServiceAccountDirectory;
         this.serviceAccountName = Util.fixEmpty(serviceAccountName);
+        this.mapRolesToGroups = mapRolesToGroups;
 
         OpenShiftOAuth2SecurityRealm.transport = transport;
         jvmDefaultKeystoreTransport = new NetHttpTransport.Builder().build();
@@ -511,6 +518,14 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             return Secret.fromString(defaultedClientSecret);
         }
         return getClientSecret();
+    }
+
+    public boolean getMapRolesToGroups() {
+        return mapRolesToGroups;
+    }
+
+    public boolean getDefaultedMapRolesToGroups() {
+        return getMapRolesToGroups();
     }
 
     public String getDefaultedNamespace() {
@@ -890,7 +905,17 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
         OpenShiftUserInfo info = getOpenShiftUserInfo(credential, transport);
         Map<String, List<Permission>> cfgedRolePermMap = getRoleToPermissionMap(transport);
         ArrayList<String> allowedRoles = postSAR(credential, transport);
-        GrantedAuthority[] authorities = new GrantedAuthority[] { SecurityRealm.AUTHENTICATED_AUTHORITY };
+        GrantedAuthority[] authorities = new GrantedAuthority[ 1 + allowedRoles.size() ];
+        authorities[0] = SecurityRealm.AUTHENTICATED_AUTHORITY;
+
+        // add user to groups, group == role from ConfigMap
+        {
+          int i = 1;
+          for (String role : allowedRoles) {
+            authorities[i] = new org.acegisecurity.GrantedAuthorityImpl(role);
+            i++;
+          }
+        }
 
         // we append the role suffix to the name stored into Jenkins, since a
         // given user is able to log in at varying scope/permission
@@ -922,7 +947,12 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
         // assigned to the view role
         UsernamePasswordAuthenticationToken token = null;
         if (suffix != null) {
-            String matrixKey = info.getName() + suffix;
+            String matrixKey = null;
+            if( this.mapRolesToGroups ) {
+                matrixKey = info.getName();
+            } else {
+                matrixKey = info.getName() + suffix;
+            }
             token = new UsernamePasswordAuthenticationToken(matrixKey, EMPTY_STRING, authorities);
             SecurityContextHolder.getContext().setAuthentication(token);
 
@@ -964,7 +994,17 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
                     LOGGER.fine(String.format("updateAuthorizationStrategy: got users %s where this user is %s",
                             usersGroups.toString(), info.getName()));
 
-                if (usersGroups.contains(matrixKey)) {
+                boolean needUpdate = false;
+                if( this.mapRolesToGroups ) {
+                    // better do this every time if something changed in ConfigMap
+                    needUpdate = true;
+                } else {
+                    if (! usersGroups.contains(matrixKey)) {
+                        needUpdate = true;
+                    }
+                }
+
+                if (!needUpdate) {
                     // since we store username-maxrole in the auth matrix, we
                     // can infer that since this user-role pair already exists
                     // as a key, there is no need to update the matrix
@@ -990,6 +1030,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
                         for (String userGroup : usersGroups) {
                             // copy any of the other users' permissions from the
                             // prior auth mgr to our new one
+                            if( ! allowedRoles.contains(userGroup) ) { // these we'll add later explicitly
+                                continue;
+                            }
                             for (PermissionGroup pg : permissionGroups) {
                                 for (Permission p : pg.getPermissions()) {
                                     if (existingAuthMgr.hasPermission(userGroup, p)) {
@@ -1005,10 +1048,19 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
                         LOGGER.info(String.format(
                                 "OpenShift OAuth: adding permissions for user %s, stored in the matrix as %s, based on OpenShift roles %s",
                                 info.getName(), matrixKey, allowedRoles));
-                        for (String role : allowedRoles) {
-                            List<Permission> perms = cfgedRolePermMap.get(role);
-                            for (Permission perm : perms) {
-                                newAuthMgr.add(perm, matrixKey);
+                        if( this.mapRolesToGroups ) {
+                            for (String role : cfgedRolePermMap.keySet()) {
+                                List<Permission> perms = cfgedRolePermMap.get(role);
+                                for (Permission perm : perms) {
+                                    newAuthMgr.add(perm, role);
+                                }
+                            }
+                        } else {
+                            for (String role : allowedRoles) {
+                                List<Permission> perms = cfgedRolePermMap.get(role);
+                                for (Permission perm : perms) {
+                                    newAuthMgr.add(perm, matrixKey);
+                                }
                             }
                         }
 

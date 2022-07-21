@@ -118,7 +118,7 @@ public class OpenShiftOAuth2SecurityRealmTest {
         String port = ":1234";
         String context = "/my-context";
         String redir = origin + port + context;
-        OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret, redir);
+        OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret, redir, false);
         String url = realm.buildOAuthRedirectUrl(redir);
         assertThat(url, is(origin + port + SECURITY_REALM_FINISH_LOGIN));
     }
@@ -129,7 +129,7 @@ public class OpenShiftOAuth2SecurityRealmTest {
         String port = ":443";
         String context = "/my-context";
         String redir = origin + port + context;
-        OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret, redir);
+        OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret, redir, false);
         String url = realm.buildOAuthRedirectUrl(redir);
         assertThat(url, is(origin + SECURITY_REALM_FINISH_LOGIN));
     }
@@ -140,7 +140,7 @@ public class OpenShiftOAuth2SecurityRealmTest {
         String port = ":12345";
         String context = "/my-context";
         String redir = origin + port + context;
-        OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret, redir);
+        OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret, redir, false);
         String url = realm.buildOAuthRedirectUrl(redir);
         assertThat(url, is(origin + port + SECURITY_REALM_FINISH_LOGIN));
     }
@@ -151,14 +151,14 @@ public class OpenShiftOAuth2SecurityRealmTest {
         String port = ":80";
         String context = "/my-context";
         String redir = origin + port + context;
-        OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret, redir);
+        OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret, redir, false);
         String url = realm.buildOAuthRedirectUrl(redir);
         assertThat(url, is(origin + SECURITY_REALM_FINISH_LOGIN));
     }
 
     @Test
     public void testLoginUrl() throws Exception {
-        OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret, server);
+        OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret, server, false);
         assertThat(realm.getLoginUrl(), is("securityRealm/commenceLogin"));
     }
 
@@ -166,7 +166,7 @@ public class OpenShiftOAuth2SecurityRealmTest {
     public void testAuthorizeRedirect() throws Exception {
         OpenShiftOAuth2SecurityRealm.testTransport = new NetHttpTransport.Builder().doNotValidateCertificate().build();
         final OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret,
-                server);
+                server, false);
         realm.redirectUrl = "http://localhost:19191/jenkins" + SECURITY_REALM_FINISH_LOGIN;
 
         OAuthSession s = realm.newOAuthSession("http://localhost/start", "http://localhost/done");
@@ -236,7 +236,7 @@ public class OpenShiftOAuth2SecurityRealmTest {
     @Test
     public void testPodDefaults() throws Exception {
         final OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret,
-                server);
+                server, false);
         assertThat(realm.populateDefaults(), is(false));
         assertThat(realm.getDefaultedServerPrefix(), is(OpenShiftOAuth2SecurityRealm.DEFAULT_SVR_PREFIX));
         assertThat(realm.getDefaultedServiceAccountDirectory(), is(OpenShiftOAuth2SecurityRealm.DEFAULT_SVC_ACCT_DIR));
@@ -245,7 +245,7 @@ public class OpenShiftOAuth2SecurityRealmTest {
     @Test
     public void testBuildOAuthRedirectUrlWithoutPrefix() throws Exception {
         final OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret,
-                server);
+                server, false);
         // Create a new OAuthSession with a redirectUrl with a long path
         OAuthSession session = realm.newOAuthSession("from", "https://example.com/jenkins/extra/path");
 
@@ -265,7 +265,7 @@ public class OpenShiftOAuth2SecurityRealmTest {
     @Test
     public void testBuildOAuthRedirectUrlWithPrefixWithPort() throws Exception {
         final OpenShiftOAuth2SecurityRealm realm = new OpenShiftOAuth2SecurityRealm(null, null, server, id, secret,
-                server);
+                server, false);
         // Create a new OAuthSession with a redirectUrl with a long path
         OAuthSession session = realm.newOAuthSession("from", "https://example.com:1234/jenkins/extra/path");
         // Find private 'redirectUrl' field using Java Reflection and assert it doesn't

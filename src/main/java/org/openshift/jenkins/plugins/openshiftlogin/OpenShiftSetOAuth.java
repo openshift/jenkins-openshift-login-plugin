@@ -73,7 +73,7 @@ public class OpenShiftSetOAuth {
                         lastCheck = System.currentTimeMillis();
                         try {
                             final OpenShiftOAuth2SecurityRealm osrealm = new OpenShiftOAuth2SecurityRealm(
-                                    null, null, null, null, null, null);
+                                    null, null, null, null, null, null, false);
                             boolean inOpenShiftPod = false;
                             try {
                                 inOpenShiftPod = osrealm.populateDefaults();
