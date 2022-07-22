@@ -962,7 +962,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             // browser window;
             // we'll display the "core" user name without the admin/edit/view
             // suffix
-            u.setFullName(info.getName());
+            if( ! this.mapRolesToGroups ) {
+                u.setFullName(info.getName());
+            }
             u.save();
             SecurityListener.fireAuthenticated(new OpenShiftUserDetails(token.getName(), authorities));
 

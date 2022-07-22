@@ -56,6 +56,9 @@ public class OpenShiftUserInfo extends UserProperty {
     @Key
     public String email;
 
+    @Key
+    public String fullName;
+
     public String getEmail() {
         return email;
     }
@@ -75,8 +78,13 @@ public class OpenShiftUserInfo extends UserProperty {
         if (email != null)
             u.addProperty(new Mailer.UserProperty(email));
 
-        if (getName() != null)
-            u.setFullName(getName());
+        if (fullName != null) {
+            u.setFullName(fullName);
+        } else {
+            if (getName() != null) {
+                u.setFullName(getName());
+            }
+        }
 
         u.addProperty(this);
     }
