@@ -434,17 +434,19 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             String redactedDefaultClientSecret = this.defaultedClientSecret != null
                     && this.defaultedClientSecret.length() > 6 ? this.defaultedClientSecret.substring(0, 5) + "......."
                             : "null";
-            String msg1 = "OpenShift OAuth running in k8s/openshift: [%s] with namespace [%s] ServiceAccount directory [%s]";
-            String msg2 = "     default ServiceAccount directory [%s] , serviceAccountName [%s], ";
-            String msg3 = "     clientId: [%s],  default clientID: [%s], clientSecret: [%s], default clientSecret: [%s],";
-            String msg4 = "     redirectUrl: [%s], default redirectUrl: [%s], serverPrefix: [%s], defaultedServerPrefix:[%s]";
+            String msg1 = "OpenShift OAuth running in k8s/openshift: [%s] with namespace [%s], ServiceAccount directory [%s],";
+            String msg2 = "     default ServiceAccount directory [%s], serviceAccountName [%s],";
+            String msg3 = "     default serviceAccountName [%s], clientId: [%s], default clientID: [%s], clientSecret: [%s],";
+            String msg4 = "     default clientSecret: [%s], redirectUrl: [%s], default redirectUrl: [%s], serverPrefix: [%s],";
+            String msg5 = "     default serverPrefix: [%s]";
             LOGGER.info(format(msg1, runningInOpenShiftPodWithRequiredOAuthFeatures, this.namespace,
                     this.serviceAccountDirectory));
             LOGGER.info(format(msg2, this.defaultedServiceAccountDirectory, this.serviceAccountName));
             LOGGER.info(format(msg3, this.defaultedServiceAccountName, this.clientId, this.defaultedClientId,
-                    redactedClientSecret, redactedDefaultClientSecret));
-            LOGGER.info(format(msg4, this.redirectURL, this.defaultedRedirectURL, this.serverPrefix,
-                    this.defaultedServerPrefix));
+                    redactedClientSecret));
+            LOGGER.info(format(msg4, redactedDefaultClientSecret, this.redirectURL, this.defaultedRedirectURL,
+                    this.serverPrefix));
+            LOGGER.info(format(msg5, this.defaultedServerPrefix));
         }
         return runningInOpenShiftPodWithRequiredOAuthFeatures;
     }
