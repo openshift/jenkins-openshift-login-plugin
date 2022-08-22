@@ -434,9 +434,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             String redactedDefaultClientSecret = this.defaultedClientSecret != null
                     && this.defaultedClientSecret.length() > 6 ? this.defaultedClientSecret.substring(0, 5) + "......."
                             : "null";
-            String msg1 = "OpenShift OAuth running in k8s/openshift: [%s] with namespace [%s], ServiceAccount directory [%s],";
-            String msg2 = "     default ServiceAccount directory [%s], serviceAccountName [%s],";
-            String msg3 = "     default serviceAccountName [%s], clientId: [%s], default clientID: [%s], clientSecret: [%s],";
+            String msg1 = "OpenShift OAuth running in k8s/openshift: [%s] with namespace [%s], ServiceAccount directory: [%s],";
+            String msg2 = "     default ServiceAccount directory: [%s], serviceAccountName: [%s],";
+            String msg3 = "     default serviceAccountName: [%s], clientId: [%s], default clientID: [%s], clientSecret: [%s],";
             String msg4 = "     default clientSecret: [%s], redirectUrl: [%s], default redirectUrl: [%s], serverPrefix: [%s],";
             String msg5 = "     default serverPrefix: [%s]";
             LOGGER.info(format(msg1, runningInOpenShiftPodWithRequiredOAuthFeatures, this.namespace,
