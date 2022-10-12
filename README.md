@@ -89,7 +89,7 @@ For the `edit` role, in addition to the permissions available to `view`:
 * hudson.model.Item.CANCEL
 * hudson.model.Item.WORKSPACE
 * hudson.scm.SCM.TAG
-* jenkins.model.Jenkins.RUN_SCRIPTS
+* jenkins.model.Jenkins.RUN_SCRIPTS // Deprecated, see https://www.jenkins.io/doc/book/security/access-control/permissions/#obsolete-permissions, must grant user Overall/Administrator to allow running of scripts.
 
 Users authenticated against OpenShift OAuth will be added to the Jenkins authorization matrix upon their first successful login.
 
