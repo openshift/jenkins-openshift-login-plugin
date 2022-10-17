@@ -140,7 +140,7 @@ rules:
 ```
 
 1. Name of the role doesn't actually matter, but for consistancy suggest aligning with (3)
-2. Namespace of the role needs to be either in the namespace Jenkins is running in or htis needs to be a ClusterRole not bound to a namespace
+2. Namespace of the role needs to be either in the namespace Jenkins is running in or this needs to be a ClusterRole not bound to a namespace
 3. The verb is the key bit, and is what you will use in your openshift-jenkins-login-plugin-config ConfigMap as the role OpenShift role name
    * **IMPORTANT**: The plugin does not look at the Role name (1) but rather [treates the roles in the openshift-jenkins-login-plugin-config ConfigMap as verbes](https://github.com/openshift/jenkins-openshift-login-plugin/blob/master/src/main/java/org/openshift/jenkins/plugins/openshiftlogin/OpenShiftOAuth2SecurityRealm.java#L684-L685) on the [apiGroup (4)](https://github.com/openshift/jenkins-openshift-login-plugin/blob/master/src/main/java/org/openshift/jenkins/plugins/openshiftlogin/OpenShiftSubjectAccessReviewRequest.java#L39) and [resource (5)](https://github.com/openshift/jenkins-openshift-login-plugin/blob/master/src/main/java/org/openshift/jenkins/plugins/openshiftlogin/OpenShiftSubjectAccessReviewRequest.java#L40).
 4. This currently has to be `build.openshift.io`
