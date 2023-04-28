@@ -3,42 +3,27 @@
   <parent>
     <groupId>org.jenkins-ci.plugins</groupId>
     <artifactId>plugin</artifactId>
-    <version>4.33</version>
+    <version>4.61</version>
+    <relativePath/>
   </parent>
-
   <groupId>org.openshift.jenkins</groupId>
   <artifactId>openshift-login</artifactId>
-  <version>1.0.28-SNAPSHOT</version>
+  <version>1.1.0-SNAPSHOT</version>
   <packaging>hpi</packaging>
 
-  <scm>
-    <connection>scm:git:ssh://github.com/jenkinsci/openshift-login-plugin.git</connection>
-    <developerConnection>scm:git:ssh://git@github.com/jenkinsci/openshift-login-plugin.git</developerConnection>
-    <url>https://github.com/jenkinsci/openshift-login-plugin</url>
-    <tag>HEAD</tag>
-  </scm>
-
-
   <properties>
-    <enforcer.skip>true</enforcer.skip>
-    <java.level>8</java.level>
-    <jenkins.version>2.289.1</jenkins.version>
+    <jenkins.version>2.387.2</jenkins.version>
+    <java.level>11</java.level>
+    <log.level>INFO</log.level>
   </properties>
 
   <name>OpenShift Login Plugin</name>
-  <url>https://wiki.jenkins-ci.org/display/JENKINS/OpenShift+Login+Plugin</url>
-  <developers>
-    <developer>
-      <id>smarterclayton</id>
-      <name>Clayton Coleman</name>
-      <email>smarterclayton@gmail.com</email>
-    </developer>
-    <developer>
-      <id>gabemontero</id>
-      <name>Gabe Montero</name>
-      <email>gmontero@redhat.com</email>
-    </developer>
-  </developers>
+  <url>https://plugins.jenkins.io/openshift-login/</url>
+
+  <organization>
+    <name>Red Hat</name>
+    <url>https://redhat.com</url>
+  </organization>
 
   <licenses>
     <license>
@@ -46,61 +31,12 @@
       <url>https://opensource.org/licenses/MIT</url>
     </license>
   </licenses>
-  <dependencies>
-    <dependency>
-      <groupId>com.google.oauth-client</groupId>
-      <artifactId>google-oauth-client</artifactId>
-      <version>1.34.1</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.http-client</groupId>
-      <artifactId>google-http-client-jackson2</artifactId>
-      <version>1.30.2</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.oauth-client</groupId>
-      <artifactId>google-oauth-client-java6</artifactId>
-      <version>1.30.2</version>
-    </dependency>
-    <dependency>
-      <groupId>org.jenkins-ci.plugins</groupId>
-      <artifactId>mailer</artifactId>
-      <version>408.vd726a_1130320</version>
-    </dependency>
-    <dependency>
-      <groupId>org.jenkins-ci.plugins</groupId>
-      <artifactId>matrix-auth</artifactId>
-      <version>1.1</version>
-    </dependency>
-    <dependency>
-      <groupId>org.jenkins-ci.plugins</groupId>
-      <artifactId>credentials</artifactId>
-      <version>2.1.9</version>
-    </dependency>
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.hamcrest</groupId>  <!-- forcing hamcrest-core:2.x to fix RequireUpperBoundDeps error-->
-      <artifactId>hamcrest-core</artifactId>
-      <version>2.2</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpclient</artifactId>
-      <version>4.5.9</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.easymock</groupId>
-      <artifactId>easymock</artifactId>
-      <version>3.4</version>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
+
+  <scm>
+    <connection>scm:git:https://github.com/jenkinsci/openshift-login-plugin.git</connection>
+    <url>https://github.com/jenkinsci/openshift-login-plugin</url>
+    <tag>HEAD</tag>
+  </scm>
 
   <distributionManagement>
     <repository>
@@ -115,11 +51,215 @@
       <url>https://repo.jenkins-ci.org/public/</url>
     </repository>
   </repositories>
-
   <pluginRepositories>
     <pluginRepository>
       <id>repo.jenkins-ci.org</id>
       <url>https://repo.jenkins-ci.org/public/</url>
     </pluginRepository>
   </pluginRepositories>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.google.http-client</groupId>
+      <artifactId>google-http-client-jackson2</artifactId>
+      <version>1.43.1</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.oauth-client</groupId>
+      <artifactId>google-oauth-client-java6</artifactId>
+      <version>1.34.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>mailer</artifactId>
+      <version>448.v5b_97805e3767</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>matrix-auth</artifactId>
+      <version>3.1.5</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>credentials</artifactId>
+      <version>1224.vc23ca_a_9a_2cb_0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.easymock</groupId>
+      <artifactId>easymock</artifactId>
+      <version>5.1.0</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- https://mvnrepository.com/artifact/io.jenkins.tools.bom/bom-2.303.x -->
+      <dependency>
+        <groupId>io.jenkins.tools.bom</groupId>
+        <artifactId>bom-2.303.x</artifactId>
+        <version>1505.vcc5b_40a_15e40</version>
+        <type>pom</type>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>versions-maven-plugin</artifactId>
+        <version>2.7</version>
+        <configuration>
+          <excludes>
+            <exclude>org.apache.commons:commons-collections4</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <version>4.7.2.1</version>
+        <dependencies>
+          <!-- overwrite dependency on spotbugs if you want to specify the version of spotbugs -->
+          <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs</artifactId>
+            <version>4.7.3</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <failOnError>false</failOnError>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.jenkins-ci.tools</groupId>
+        <artifactId>maven-hpi-plugin</artifactId>
+        <version>3.43</version>
+        <configuration>
+          <pluginFirstClassLoader>true</pluginFirstClassLoader>
+          <loggers>
+            <io.fabric8>${log.level}</io.fabric8>
+            <okhttp3>${log.level}</okhttp3>
+          </loggers>
+          <webApp>
+            <contextPath>/</contextPath>
+          </webApp>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.jvnet.localizer</groupId>
+        <artifactId>maven-localizer-plugin</artifactId>
+        <version>1.12</version>
+        <executions>
+          <execution>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+            <configuration>
+              <fileMask>Messages.properties</fileMask>
+              <outputDirectory>target/generated-sources/localizer</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>com.mycila</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <version>2.11</version>
+        <configuration>
+          <aggregate>true</aggregate>
+          <header>header.txt</header>
+          <properties>
+            <owner>Red Hat, Inc.</owner>
+          </properties>
+          <excludes>
+            <exclude>LICENSE</exclude>
+            <exclude>work/**</exclude>
+          </excludes>
+          <headerDefinitions>
+            <headerDefinition>license-headers-config.xml</headerDefinition>
+          </headerDefinitions>
+          <mapping>
+            <jelly>XML_STYLE</jelly>
+            <editorconfig>SEMICOLON_STYLE</editorconfig>
+            <groovy>GROOVY_STYLE</groovy>
+            <Jenkinsfile>GROOVY_STYLE</Jenkinsfile>
+          </mapping>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>1.6</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <version>3.3.0</version>
+            <executions>
+              <execution>
+                <id>enforce-no-snapshots</id>
+                <goals>
+                  <goal>enforce</goal>
+                </goals>
+                <configuration>
+                  <rules>
+                    <dependencyConvergence/>
+                    <requireReleaseDeps>
+                      <message>No Snapshots Allowed!</message>
+                    </requireReleaseDeps>
+                  </rules>
+                  <fail>true</fail>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>2.4</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
