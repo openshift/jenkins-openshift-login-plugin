@@ -149,7 +149,8 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
 
     private static final String USER_URI = "/apis/user.openshift.io/v1/users/~";
     private static final String SAR_URI = "/apis/authorization.openshift.io/v1/subjectaccessreviews";
-    private static final String CONFIG_MAP_URI = "/api/v1/namespaces/%s/configmaps/openshift-jenkins-login-plugin-config";
+    private static final String CONFIG_MAP_DEFAULT_NAME = "openshift-jenkins-login-plugin-config";
+    private static final String CONFIG_MAP_URI = "/api/v1/namespaces/%s/configmaps/%s";
     private static final String OAUTH_PROVIDER_URI = "/.well-known/oauth-authorization-server";
     private static final String OAUTH_ACCESS_URI = "/apis/oauth.openshift.io/v1/oauthaccesstokens/%s";
 
@@ -198,6 +199,11 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
      *
      */
     private static HttpTransport jvmDefaultKeystoreTransport;
+
+    /**
+     * The name of the ConfigMap in OpenShift containg a custom permission mapping.
+     */
+    private String configMapName;
 
     /**
      * The service account directory, if set, instructs the plugin to follow the
@@ -448,6 +454,12 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
                     this.serverPrefix));
             LOGGER.info(format(msg5, this.defaultedServerPrefix));
         }
+
+        configMapName = EnvVars.masterEnvVars.get("CONFIG_MAP_NAME");
+        if (configMapName == null) {
+            configMapName = CONFIG_MAP_DEFAULT_NAME;
+        }
+
         return runningInOpenShiftPodWithRequiredOAuthFeatures;
     }
 
@@ -729,7 +741,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
                 .setAccessToken(getDefaultedClientSecret().getPlainText());
         HttpRequestFactory requestFactory = transport
                 .createRequestFactory(new CredentialHttpRequestInitializer(credential));
-        GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + String.format(CONFIG_MAP_URI, namespace));
+        GenericUrl url = new GenericUrl(getDefaultedServerPrefix() + String.format(CONFIG_MAP_URI, namespace, configMapName));
         HttpRequest request = null;
         ConfigMapResponse response = null;
         String prefix = "OpenShift Jenkins Login Plugin";
@@ -737,14 +749,14 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             request = requestFactory.buildGetRequest(url);
             response = request.execute().parseAs(ConfigMapResponse.class);
         } catch (IOException e) {
-            LOGGER.info(prefix + " could not find the openshift-jenkins-login-plugin-config config map in namespace "
+            LOGGER.info(prefix + " could not find the " + configMapName + " config map in namespace "
                     + namespace + " so the default permission mapping will be used");
             LOGGER.log(Level.FINE, "getRoleToPermissionMap", e);
             return rolesToPermissionsMap;
         }
 
         if (response == null || response.data == null || response.data.size() == 0) {
-            LOGGER.info(prefix + " did not see the openshift-jenkins-login-plugin-config config map in namespace "
+            LOGGER.info(prefix + " did not see the " + configMapName + " config map in namespace "
                     + namespace + " so the default permission mapping will be used");
             return rolesToPermissionsMap;
         }
