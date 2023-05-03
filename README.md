@@ -98,8 +98,7 @@ Now, with v1.0.10 of this plugin, you can change
 * Which OpenShift Roles are checked for authorization
 * Which Jenkins permissions map to which OpenShift Roles
 
-This plugin will look at for a ConfigMap named openshift-jenkins-login-plugin-config.  Typically, when running Jenkins in an OpenShift Pod, it 
-will look in the namespace that Jenkins is running in.  Otherwise, it looks in the namespace specified in the "client ID" as explained in ["Secondary Scenarios" down below.](#secondary-scenarios) 
+This plugin will look for a ConfigMap named after the content of the environment variable `CONFIG_MAP_NAME`.  The default ConfigMap name when no environment variable is set is "openshift-jenkins-login-plugin-config".  Typically, when running Jenkins in an OpenShift Pod, it will look in the namespace that Jenkins is running in.  Otherwise, it looks in the namespace specified in the "client ID" as explained in ["Secondary Scenarios" down below.](#secondary-scenarios) 
 
 If this plugin finds and can read in that ConfigMap, it then:
 
