@@ -149,7 +149,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
 
     private static final String USER_URI = "/apis/user.openshift.io/v1/users/~";
     private static final String SAR_URI = "/apis/authorization.openshift.io/v1/subjectaccessreviews";
-    private static final String CONFIG_MAP_DEFAULT_NAME = "openshift-jenkins-login-plugin-config";
+    private static final String CONFIG_MAP_NAME_DEFAULT  = "openshift-jenkins-login-plugin-config";
     private static final String CONFIG_MAP_URI = "/api/v1/namespaces/%s/configmaps/%s";
     private static final String OAUTH_PROVIDER_URI = "/.well-known/oauth-authorization-server";
     private static final String OAUTH_ACCESS_URI = "/apis/oauth.openshift.io/v1/oauthaccesstokens/%s";
@@ -457,7 +457,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
 
         configMapName = EnvVars.masterEnvVars.get("CONFIG_MAP_NAME");
         if (configMapName == null) {
-            configMapName = CONFIG_MAP_DEFAULT_NAME;
+            configMapName = CONFIG_MAP_NAME_DEFAULT ;
         }
 
         return runningInOpenShiftPodWithRequiredOAuthFeatures;
