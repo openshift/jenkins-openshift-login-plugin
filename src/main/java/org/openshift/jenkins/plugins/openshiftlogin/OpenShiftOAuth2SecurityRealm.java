@@ -201,7 +201,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
     private static HttpTransport jvmDefaultKeystoreTransport;
 
     /**
-     * The name of the ConfigMap in OpenShift containg a custom permission mapping.
+     * The name of the ConfigMap in OpenShift containing a custom permission mapping.
      */
     private String configMapName;
 
