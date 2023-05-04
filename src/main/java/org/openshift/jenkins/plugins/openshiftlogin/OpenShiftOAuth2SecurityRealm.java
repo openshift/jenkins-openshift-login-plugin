@@ -455,9 +455,9 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
             LOGGER.info(format(msg5, this.defaultedServerPrefix));
         }
 
-        configMapName = EnvVars.masterEnvVars.get("CONFIG_MAP_NAME");
-        if (configMapName == null) {
-            configMapName = CONFIG_MAP_NAME_DEFAULT ;
+        configMapName = CONFIG_MAP_NAME_DEFAULT;
+        if (EnvVars.masterEnvVars.get("CONFIG_MAP_NAME") != null) {
+            configMapName = EnvVars.masterEnvVars.get("CONFIG_MAP_NAME");
         }
 
         return runningInOpenShiftPodWithRequiredOAuthFeatures;
