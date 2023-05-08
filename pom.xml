@@ -15,11 +15,11 @@
     <revision>1.1.0</revision>
     <changelist>999999-SNAPSHOT</changelist>
     <jenkins.version>2.387.2</jenkins.version>
-    <java.level>11</java.level>
     <log.level>INFO</log.level>
   </properties>
 
   <name>OpenShift Login Plugin</name>
+  <description>Allows login to Jenkins using OpenShift as an SSO.</description>
   <url>https://plugins.jenkins.io/openshift-login/</url>
 
   <organization>
@@ -35,9 +35,10 @@
   </licenses>
 
   <scm>
-    <connection>scm:git:https://github.com/jenkinsci/openshift-login-plugin.git</connection>
-    <url>https://github.com/jenkinsci/openshift-login-plugin</url>
-    <tag>HEAD</tag>
+    <connection>scm:git:https://github.com/jenkinsci/${project.artifactId}-plugin.git</connection>
+    <developerConnection>scm:git:https://github.com/jenkinsci/${project.artifactId}-plugin.git</developerConnection>
+    <url>https://github.com/jenkinsci/${project.artifactId}-plugin/</url>
+    <tag>${scmTag}</tag>
   </scm>
 
   <distributionManagement>
