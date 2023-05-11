@@ -65,7 +65,7 @@
     <dependency>
       <groupId>com.google.http-client</groupId>
       <artifactId>google-http-client-jackson2</artifactId>
-      <version>1.43.1</version>
+      <version>1.43.2</version>
     </dependency>
     <dependency>
       <groupId>com.google.oauth-client</groupId>
@@ -75,17 +75,17 @@
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>mailer</artifactId>
-      <version>448.v5b_97805e3767</version>
+      <version>458.vb_b_9cfa_a_a_a_7f0</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>matrix-auth</artifactId>
-      <version>3.1.5</version>
+      <version>3.2-rc393.c200fd32fcd4</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>credentials</artifactId>
-      <version>1224.vc23ca_a_9a_2cb_0</version>
+      <version>1260.vb_03671f39d3d</version>
     </dependency>
     <dependency>
       <groupId>org.easymock</groupId>
@@ -112,7 +112,7 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>versions-maven-plugin</artifactId>
-        <version>2.7</version>
+        <version>2.15.0</version>
         <configuration>
           <excludes>
             <exclude>org.apache.commons:commons-collections4</exclude>
@@ -122,7 +122,7 @@
       <plugin>
         <groupId>com.github.spotbugs</groupId>
         <artifactId>spotbugs-maven-plugin</artifactId>
-        <version>4.7.2.1</version>
+        <version>4.7.3.4</version>
         <dependencies>
           <!-- overwrite dependency on spotbugs if you want to specify the version of spotbugs -->
           <dependency>
@@ -135,7 +135,7 @@
       <plugin>
         <groupId>org.jenkins-ci.tools</groupId>
         <artifactId>maven-hpi-plugin</artifactId>
-        <version>3.43</version>
+        <version>3.45-rc1439.a_feb_e362b_c03</version>
         <configuration>
           <pluginFirstClassLoader>true</pluginFirstClassLoader>
           <loggers>
@@ -150,7 +150,7 @@
       <plugin>
         <groupId>org.jvnet.localizer</groupId>
         <artifactId>maven-localizer-plugin</artifactId>
-        <version>1.12</version>
+        <version>1.26</version>
         <executions>
           <execution>
             <phase>generate-sources</phase>
@@ -167,7 +167,7 @@
       <plugin>
         <groupId>com.mycila</groupId>
         <artifactId>license-maven-plugin</artifactId>
-        <version>2.11</version>
+        <version>4.2</version>
         <configuration>
           <aggregate>true</aggregate>
           <header>header.txt</header>
@@ -199,7 +199,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>
-            <version>1.6</version>
+            <version>3.1.0</version>
             <executions>
               <execution>
                 <id>sign-artifacts</id>
@@ -248,7 +248,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-source-plugin</artifactId>
-            <version>2.4</version>
+            <version>3.2.1</version>
             <executions>
               <execution>
                 <id>attach-sources</id>
