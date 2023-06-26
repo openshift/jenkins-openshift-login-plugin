@@ -195,7 +195,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
      * transport that will only leverage the JVMs default keystore and allow for the
      * jenkins SA cert and the oauth server router cert varying such that SSL
      * handshakes will fail if we exclusively use the jenkins SA cert
-     * 
+     *
      */
     private static HttpTransport jvmDefaultKeystoreTransport;
 
@@ -877,7 +877,7 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
         LOGGER.info(format("AuthorizationCodeFlow using : authorizationServerURL=[%s], ", authorizationServerURL));
         final AuthorizationCodeFlow flow = new AuthorizationCodeFlow.Builder(queryParameters, transportForThisRequest,
                 JSON_FACTORY, tokenServerURL, clientAuthentication, defaultedClientId, authorizationServerURL)
-                        .setScopes(scopes).build();
+                .setScopes(scopes).build();
         final OpenShiftOAuth2SecurityRealm secRealm = this;
         final String url = buildOAuthRedirectUrl(redirectOnFinish);
         BearerTokenOAuthSession bearerTokenOAuthSession = new BearerTokenOAuthSession(flow, from, url, redirectOnFinish,
@@ -1045,10 +1045,27 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
     }
 
     /**
+     * Validate that any possible redirect url begins with the Jenkins instance root
+     * url.
+     */
+    private boolean isValidRedirect(String url) {
+        return url.startsWith("/") || url.toLowerCase(DEFAULT_LOCALE_PERMISSION)
+                .startsWith(Jenkins.getInstance().getRootUrl().toLowerCase(DEFAULT_LOCALE_PERMISSION));
+    }
+
+    /**
      * The login process starts from here.
      */
     public HttpResponse doCommenceLogin(@QueryParameter String from, @Header("Referer") final String referer)
             throws IOException {
+
+        if (!from.isEmpty() && !isValidRedirect(from)) {
+            throw new MalformedURLException("invalid redirect [" + from + "]");
+        }
+        if (referer != null && !isValidRedirect(referer)) {
+            throw new MalformedURLException("invalid redirect " + referer);
+        }
+
         LOGGER.entering(OpenShiftOAuth2SecurityRealm.class.getName(), START_METHOD, new Object[] { from, referer });
         LOGGER.info("doCommenceLogin: Coming from: " + referer);
         if (referer.contains(LOGGED_OUT)) {
@@ -1177,13 +1194,13 @@ public class OpenShiftOAuth2SecurityRealm extends SecurityRealm implements Seria
      * @return the computed access token name on the openshift side
      */
     public static String tokenToObjectName(String code) {
-        // for empty string or null, we will return an empty string to avoid any NPE     
+        // for empty string or null, we will return an empty string to avoid any NPE
         if (code == null) {
             code = EMPTY_STRING;
         }
-        // if the token code doesn't start with SHA256_PREFIX, we will 
-        // return the code itself as the token name. This is the expected behaviour 
-        // with ocp 4.5 and lower. if it starts with the prefix, we 
+        // if the token code doesn't start with SHA256_PREFIX, we will
+        // return the code itself as the token name. This is the expected behaviour
+        // with ocp 4.5 and lower. if it starts with the prefix, we
         // have to compute the sha_256 digest
         if (code.startsWith(SHA256_PREFIX)) {
             code = code.substring(SHA256_PREFIX.length());
