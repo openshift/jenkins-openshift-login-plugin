@@ -30,6 +30,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.UUID;
 
+import javax.servlet.http.HttpSession;
+
 import org.kohsuke.stapler.HttpRedirect;
 import org.kohsuke.stapler.HttpResponse;
 import org.kohsuke.stapler.Stapler;
@@ -50,7 +52,7 @@ import hudson.util.HttpResponses;
  * Verifies the validity of the response by comparing the state.
  */
 @SuppressWarnings("serial")
-public abstract class OAuthSession implements Serializable{
+public abstract class OAuthSession implements Serializable {
     private static final String OPENSHIFT_ENABLE_REDIRECT_PROMPT = "OPENSHIFT_ENABLE_REDIRECT_PROMPT";
     private final AuthorizationCodeFlow flow;
     private final String uuid = Base64.encode(UUID.randomUUID().toString().getBytes(UTF_8)).substring(0, 20);
@@ -111,6 +113,11 @@ public abstract class OAuthSession implements Serializable{
      */
     public HttpResponse doFinishLogin(StaplerRequest request)
             throws IOException {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
+        request.getSession(true);
         StringBuffer buf = request.getRequestURL();
         if (request.getQueryString() != null) {
             buf.append('?').append(request.getQueryString());
