@@ -49,17 +49,17 @@ import org.jvnet.hudson.test.JenkinsRule;
 import org.kohsuke.stapler.HttpRedirect;
 import org.kohsuke.stapler.StaplerResponse;
 
-import com.gargoylesoftware.htmlunit.FailingHttpStatusCodeException;
-import com.gargoylesoftware.htmlunit.Page;
-import com.gargoylesoftware.htmlunit.WebClient;
-import com.gargoylesoftware.htmlunit.WebConnection;
-import com.gargoylesoftware.htmlunit.WebRequest;
-//import com.gargoylesoftware.htmlunit.WebRequestSettings;
-import com.gargoylesoftware.htmlunit.WebResponse;
-import com.gargoylesoftware.htmlunit.html.HtmlButton;
-import com.gargoylesoftware.htmlunit.html.HtmlForm;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
-import com.gargoylesoftware.htmlunit.util.WebConnectionWrapper;
+import org.htmlunit.FailingHttpStatusCodeException;
+import org.htmlunit.Page;
+import org.htmlunit.WebClient;
+import org.htmlunit.WebConnection;
+import org.htmlunit.WebRequest;
+//import org.htmlunit.WebRequestSettings;
+import org.htmlunit.WebResponse;
+import org.htmlunit.html.HtmlButton;
+import org.htmlunit.html.HtmlForm;
+import org.htmlunit.html.HtmlPage;
+import org.htmlunit.util.WebConnectionWrapper;
 import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.javanet.NetHttpTransport;
 
@@ -197,8 +197,8 @@ public class OpenShiftOAuth2SecurityRealmTest {
             List<HtmlForm> forms = p.getForms();
             assertThat(forms.isEmpty(), is(false));
             HtmlForm form = forms.get(0);
-            form.getInputByName("username").setValueAttribute("admin" + String.valueOf(new Random().nextInt()));
-            form.getInputByName("password").setValueAttribute("admin");
+            form.getInputByName("username").setValue("admin" + String.valueOf(new Random().nextInt()));
+            form.getInputByName("password").setValue("admin");
             final List<HtmlButton> buttons = form.getElementsByAttribute("button", "type", "submit");
 
             String code = "";
@@ -287,9 +287,9 @@ public class OpenShiftOAuth2SecurityRealmTest {
      * webClient.goTo("configureSecurity"); System.out.println(currentPage.asXml());
      * HtmlElement enabled = currentPage.getElementByName("_.enabled"); assertThat(
      * enabled, not(null) );
-     * 
+     *
      * }
-     * 
+     *
      * @Test public void testEnable() throws Exception { JenkinsRule.WebClient
      * webClient = j.createWebClient(); HtmlPage currentPage =
      * webClient.goTo("configureSecurity"); HtmlElement enabled =
