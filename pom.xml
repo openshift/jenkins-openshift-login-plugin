@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.jenkins-ci.plugins</groupId>
     <artifactId>plugin</artifactId>
-    <version>4.66</version>
+    <version>4.69</version>
     <relativePath />
   </parent>
   <groupId>org.openshift.jenkins</groupId>
@@ -14,7 +14,7 @@
   <properties>
     <revision>1.1.0</revision>
     <changelist>999999-SNAPSHOT</changelist>
-    <jenkins.version>2.387.2</jenkins.version>
+    <jenkins.version>2.401.1</jenkins.version>
     <log.level>INFO</log.level>
   </properties>
 
@@ -75,12 +75,12 @@
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>mailer</artifactId>
-      <version>448.v5b_97805e3767</version>
+      <version>457.v3f72cb_e015e5</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>matrix-auth</artifactId>
-      <version>3.1.5</version>
+      <version>3.1.9</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
@@ -100,8 +100,8 @@
       <!-- https://mvnrepository.com/artifact/io.jenkins.tools.bom/bom-2.303.x -->
       <dependency>
         <groupId>io.jenkins.tools.bom</groupId>
-        <artifactId>bom-2.303.x</artifactId>
-        <version>1505.vcc5b_40a_15e40</version>
+        <artifactId>bom-2.401.x</artifactId>
+        <version>2220.vea_cea_f1a_35e4</version>
         <type>pom</type>
       </dependency>
     </dependencies>
@@ -112,7 +112,7 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>versions-maven-plugin</artifactId>
-        <version>2.7</version>
+        <version>2.16.0</version>
         <configuration>
           <excludes>
             <exclude>org.apache.commons:commons-collections4</exclude>
@@ -135,7 +135,7 @@
       <plugin>
         <groupId>org.jenkins-ci.tools</groupId>
         <artifactId>maven-hpi-plugin</artifactId>
-        <version>3.43</version>
+        <version>3.47</version>
         <configuration>
           <pluginFirstClassLoader>true</pluginFirstClassLoader>
           <loggers>
@@ -150,7 +150,7 @@
       <plugin>
         <groupId>org.jvnet.localizer</groupId>
         <artifactId>maven-localizer-plugin</artifactId>
-        <version>1.12</version>
+        <version>1.26</version>
         <executions>
           <execution>
             <phase>generate-sources</phase>
