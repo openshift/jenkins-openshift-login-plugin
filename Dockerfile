@@ -7,7 +7,7 @@ COPY . .
 USER 0
 RUN export PATH=/opt/rh/rh-maven35/root/usr/bin:$PATH && mvn clean package
 
-FROM registry.ci.openshift.org/origin/4.13:jenkins
+FROM registry.redhat.io/ocp-tools-4/jenkins-rhel8:v4.14.0
 RUN rm /opt/openshift/plugins/openshift-login.jpi
 COPY --from=builder /java/src/github.com/openshift/jenkins-openshift-login-plugin/target/openshift-login.hpi /opt/openshift/plugins
 RUN mv /opt/openshift/plugins/openshift-login.hpi /opt/openshift/plugins/openshift-login.jpi
